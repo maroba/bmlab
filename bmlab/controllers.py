@@ -2,12 +2,14 @@ import logging
 
 import numpy as np
 from scipy.signal import medfilt2d, find_peaks
+from scipy.cluster.hierarchy import fclusterdata
 from skimage.measure import label
 from skimage.morphology import closing, disk
 
 from math import floor
 
 from bmlab import Session
+from bmlab.session import ExtractionMethod
 from bmlab.fits import fit_vipa, VIPA, fit_lorentz_region
 from bmlab.image import extract_lines_along_arc, find_max_in_radius
 from bmlab.export import FluorescenceExport, FluorescenceCombinedExport, BrillouinExport
@@ -70,29 +72,35 @@ class ExtractionController(object):
         if imgs is None:
             return
 
-        # Average over all images in the calibration
-        img = np.nanmean(imgs, axis=0)
-
         time = self.session.get_calibration_time(calib_key)
         if time is None:
             return
 
-        # Account for binning for default values
-        disc_size = 10
-        binning = self.session.get_calibration_binning_factor(calib_key)
-        if binning:
-            max_distance = max_distance / binning
-            disc_size = disc_size / binning
-            min_area = min_area / (binning**2)
+        if self.session.extraction_method == ExtractionMethod.ARC_FROM_PTS_OF_AVG_IMG:
+            # Average over all images in the calibration and only use this image for peak finding
+            imgs = [np.nanmean(imgs, axis=0)]
 
-        img = medfilt2d(img)
+        peaks = []
+        for img in imgs:
+            # Account for binning for default values
+            disc_size = 10
+            binning = self.session.get_calibration_binning_factor(calib_key)
+            if binning:
+                max_distance = max_distance / binning
+                disc_size = disc_size / binning
+                min_area = min_area / (binning**2)
 
-        peaks = self._get_peaks_from_image(
-            img, min_height, min_area, max_distance, disc_size
-        )
+            img = medfilt2d(img)
+
+            peaks += self._get_peaks_from_image(
+                img, min_height, min_area, max_distance, disc_size
+            )
 
         # Add found peaks to model
         em = self.session.extraction_model()
+        if self.session.extraction_method == ExtractionMethod.ARC_FROM_PTS_OF_ALL_IMGS:
+            peaks = self._reduce_outer_clusters_to_single_points(peaks)
+
         em.set_points(calib_key, time, peaks)
         logger.info(f"Found {len(peaks)} points for calibration {calib_key}")
         logger.info(f"Extraction model: \n{em}")
@@ -139,6 +147,96 @@ class ExtractionController(object):
                 all_peaks,
             )
         )
+
+    def _reduce_outer_clusters_to_single_points(self, points):
+        logger.info(
+            f"Reducing outer clusters to single points. Initial number of points: {len(points)}"
+        )
+        clusters = self._get_outer_two_clusters(points)
+
+        logger.info(f"Found clusters with sizes: {[len(c) for c in clusters]}")
+        # Convert clusters to sets for efficient lookup
+        outer_cluster_points = set()
+        for cluster in clusters:
+            outer_cluster_points.update(cluster)
+
+        # Keep all points that are NOT in the outer clusters
+        reduced_points = [
+            point for point in points if point not in outer_cluster_points
+        ]
+
+        logger.info(f"Points not in outer clusters  : {len(reduced_points)}")
+
+        # Add the mean point for each outer cluster
+        for cluster in clusters:
+            if len(cluster) == 0:
+                continue
+            cluster_array = np.array(cluster)
+            mean_point = np.mean(cluster_array, axis=0)
+
+            # TODO: Think about this approach:
+            # Should we really reduce the outer clusters to single points
+            # or should we better add these single points with their statistical weight?
+            # for _ in range(len(cluster)):
+            #    reduced_points.append((mean_point[0], mean_point[1]))
+            reduced_points.append((mean_point[0], mean_point[1]))
+
+        logger.info(f"Total points after reduction: {len(reduced_points)}")
+        return reduced_points
+
+    def _get_outer_two_clusters(self, points):
+        """Extract the two outer clusters from a list of 2D points"""
+
+        if len(points) < 2:
+            return points, []
+
+        points_array = np.array(points)
+
+        # Perform hierarchical clustering
+        labels = fclusterdata(points_array, t=20, criterion="distance", method="single")
+
+        unique_labels = np.unique(labels)
+
+        if len(unique_labels) < 2:
+            return points, []
+
+        # Calculate center of each cluster
+        cluster_info = []
+        for label in unique_labels:
+            mask = labels == label
+            cluster_points = points_array[mask]
+            center = np.mean(cluster_points, axis=0)
+            cluster_info.append((label, center))
+
+        # Find the principal direction using PCA
+        pca_mean = np.mean(points_array, axis=0)
+        centered_points = points_array - pca_mean
+        cov_matrix = np.cov(centered_points.T)
+        eigenvalues, eigenvectors = np.linalg.eig(cov_matrix)
+        principal_direction = eigenvectors[:, np.argmax(eigenvalues)]
+
+        # Project each cluster center onto the principal direction
+        projections = []
+        for label, center in cluster_info:
+            projection = np.dot(center - pca_mean, principal_direction)
+            projections.append((label, projection))
+
+        # Sort by projection value and get the two extreme clusters
+        projections.sort(key=lambda x: x[1])
+        first_label = projections[0][0]
+        second_label = projections[-1][0]
+
+        # Extract points from each outer cluster separately
+        first_cluster = [
+            tuple(point) for point, label in zip(points, labels) if label == first_label
+        ]
+        second_cluster = [
+            tuple(point)
+            for point, label in zip(points, labels)
+            if label == second_label
+        ]
+
+        return first_cluster, second_cluster
 
     def distance_point_to_line(self, point, line0, line1):
         return abs(

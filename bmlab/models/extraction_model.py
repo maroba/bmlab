@@ -2,6 +2,7 @@ import logging
 import numpy as np
 from scipy import interpolate
 
+
 from bmlab.fits import fit_circle
 from bmlab.geometry import Circle, discretize_arc
 from bmlab.serializer import Serializer
@@ -61,6 +62,23 @@ class ExtractionModel(Serializer):
         self.points.pop(calib_key, None)
         self.calib_times.pop(calib_key, None)
         self.update_positions(calib_key)
+
+    def reset(self):
+        """
+        Reset the extraction model to its initial state,
+        preserving only the image_shape and arc_width settings.
+        """
+        image_shape = self.image_shape
+        arc_width = self.arc_width
+
+        self.points = {}
+        self.calib_times = {}
+        self.positions = {}
+        self.positions_interpolation = None
+
+        # Restore the preserved settings
+        self.image_shape = image_shape
+        self.arc_width = arc_width
 
     def post_deserialize(self):
         # Migrations from 0.1.10 to 0.2.0
