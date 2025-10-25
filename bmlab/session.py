@@ -1,5 +1,6 @@
 import os
 import errno
+from enum import Enum
 
 from pathlib import Path
 from functools import reduce
@@ -24,25 +25,25 @@ def get_session_file_path(source_file, create_folder=False):
     # we put the eval data file in an 'EvalData' folder and
     # don't append the 'session' string.
     file = Path(source_file).resolve()
-    if file.parent.name == 'RawData':
-        eval_folder = file.parents[1] / 'EvalData'
+    if file.parent.name == "RawData":
+        eval_folder = file.parents[1] / "EvalData"
         # Create the evaluation folder if necessary
         if create_folder and not os.path.exists(eval_folder):
             os.mkdir(eval_folder)
-        return Path(str(eval_folder / (str(file.name)[:-3] + '.h5')))
+        return Path(str(eval_folder / (str(file.name)[:-3] + ".h5")))
     else:
-        return Path(str(source_file)[:-3] + '.session.h5')
+        return Path(str(source_file)[:-3] + ".session.h5")
 
 
 def get_source_file_path(session_file):
     # If the session file is located in a 'EvalData' folder,
     # we find the source file in an 'RawData' folder
     file = Path(session_file).resolve()
-    if file.parent.name == 'EvalData':
-        raw_folder = file.parents[1] / 'RawData'
-        return Path(str(raw_folder / (str(file.name)[:-3] + '.h5')))
+    if file.parent.name == "EvalData":
+        raw_folder = file.parents[1] / "RawData"
+        return Path(str(raw_folder / (str(file.name)[:-3] + ".h5")))
     else:
-        return Path(str(session_file)[:-11] + '.h5')
+        return Path(str(session_file)[:-11] + ".h5")
 
 
 def get_valid_source(path):
@@ -50,10 +51,7 @@ def get_valid_source(path):
     # Check whether this file exists at all
     if not os.path.exists(path):
         raise FileNotFoundError(
-            errno.ENOENT,
-            "The file '{}' does not exist."
-            .format(path),
-            path
+            errno.ENOENT, "The file '{}' does not exist.".format(path), path
         )
 
     # If this is a session file, we need to check whether
@@ -66,10 +64,9 @@ def get_valid_source(path):
             raise FileNotFoundError(
                 errno.ENOENT,
                 "Could not find the corresponding source"
-                " data file '{}' for session file '{}'."
-                .format(source_file_path, path)
+                " data file '{}' for session file '{}'.".format(source_file_path, path)
                 + " Please ensure the source data file exists.",
-                source_file_path
+                source_file_path,
             )
         if is_source_file(source_file_path):
             return source_file_path
@@ -80,7 +77,7 @@ def get_valid_source(path):
                 errno.ENOENT,
                 "Could not open file '{}.".format(source_file_path)
                 + " The file is not a valid BrillouinAcquisition file.",
-                source_file_path
+                source_file_path,
             )
 
     # If this is a source file, just return its path
@@ -94,14 +91,19 @@ def get_valid_source(path):
         errno.ENOENT,
         "Could not open file '{}'.".format(path)
         + " The provided file is neither a valid"
-          " BrillouinAcquisition nor bmlab file.",
-        path
+        " BrillouinAcquisition nor bmlab file.",
+        path,
     )
 
 
 class BmlabInvalidFileError(FileNotFoundError):
     def __init__(self, *args, **kwargs):
         super(BmlabInvalidFileError, self).__init__(*args, **kwargs)
+
+
+class ExtractionMethod(Enum):
+    ARC_FROM_PTS_OF_AVG_IMG = "arc_from_pts_of_avg_img"
+    ARC_FROM_PTS_OF_ALL_IMGS = "arc_from_pts_of_all_imgs"
 
 
 class Session(Serializer):
@@ -122,7 +124,7 @@ class Session(Serializer):
         method.
         """
         if Session.__instance is not None:
-            raise Exception('Session is a singleton!')
+            raise Exception("Session is a singleton!")
         else:
             Session.__instance = self
             self.clear()
@@ -164,7 +166,7 @@ class Session(Serializer):
 
         repetitions = self.file.repetition_keys()
         for repetition in repetitions:
-            imgs = self.file.get_repetition(repetition).payload.get_image('0')
+            imgs = self.file.get_repetition(repetition).payload.get_image("0")
             # If no images are available, skip this repetition
             if imgs is None:
                 continue
@@ -180,8 +182,9 @@ class Session(Serializer):
 
         repetitions = self.file.repetition_keys()
         for repetition in repetitions:
-            binning_factor = self.file.get_repetition(repetition)\
-                .payload.get_binning_factor('0')
+            binning_factor = self.file.get_repetition(
+                repetition
+            ).payload.get_binning_factor("0")
 
             em = self.extraction_models.get(repetition)
             arc_width = math.ceil(em.arc_width / binning_factor)
@@ -216,31 +219,27 @@ class Session(Serializer):
         file_name = get_valid_source(file_name)
         # There is no valid source file
         if file_name is None:
-            raise Exception('No source data file found')
+            raise Exception("No source data file found")
 
         try:
             file = BrillouinFile(file_name)
         except Exception as e:
             raise e
         else:
-            """ Only load data if the file could be opened """
+            """Only load data if the file could be opened"""
             session = Session.get_instance()
             session.file = file
             session.extraction_models = {
-                key: ExtractionModel()
-                for key in self.file.repetition_keys()
+                key: ExtractionModel() for key in self.file.repetition_keys()
             }
             session.calibration_models = {
-                key: CalibrationModel()
-                for key in self.file.repetition_keys()
+                key: CalibrationModel() for key in self.file.repetition_keys()
             }
             session.peak_selection_models = {
-                key: PeakSelectionModel()
-                for key in self.file.repetition_keys()
+                key: PeakSelectionModel() for key in self.file.repetition_keys()
             }
             session.evaluation_models = {
-                key: EvaluationModel()
-                for key in self.file.repetition_keys()
+                key: EvaluationModel() for key in self.file.repetition_keys()
             }
             self.set_image_shape()
             self.set_arc_width()
@@ -258,8 +257,9 @@ class Session(Serializer):
     def get_calib_keys(self, sort_by_time=False):
         if self.current_repetition() is None:
             return None
-        return self.current_repetition()\
-            .calibration.image_keys(sort_by_time=sort_by_time)
+        return self.current_repetition().calibration.image_keys(
+            sort_by_time=sort_by_time
+        )
 
     def get_calibration_image(self, calib_key, frame_num=None):
         if self.current_repetition() is None:
@@ -270,8 +270,7 @@ class Session(Serializer):
         return self.orientation.apply(imgs)
 
     def get_calibration_image_count(self, calib_key):
-        return self.current_repetition()\
-            .calibration.get_image_count(calib_key)
+        return self.current_repetition().calibration.get_image_count(calib_key)
 
     def get_calibration_time(self, calib_key):
         if self.current_repetition() is None:
@@ -291,14 +290,12 @@ class Session(Serializer):
     def get_calibration_binning_factor(self, calib_key):
         if self.current_repetition() is None:
             return None
-        return self.current_repetition()\
-            .calibration.get_binning_factor(calib_key)
+        return self.current_repetition().calibration.get_binning_factor(calib_key)
 
     def get_image_keys(self, sort_by_time=False):
         if self.current_repetition() is None:
             return None
-        return self.current_repetition()\
-            .payload.image_keys(sort_by_time=sort_by_time)
+        return self.current_repetition().payload.image_keys(sort_by_time=sort_by_time)
 
     def get_payload_image(self, image_key, frame_num=None):
         if self.current_repetition() is None:
@@ -329,8 +326,7 @@ class Session(Serializer):
     def get_payload_binning_factor(self, image_key):
         if self.current_repetition() is None:
             return None
-        return self.current_repetition()\
-            .payload.get_binning_factor(image_key)
+        return self.current_repetition().payload.get_binning_factor(image_key)
 
     def get_payload_resolution(self):
         if self.current_repetition() is None:
@@ -349,11 +345,11 @@ class Session(Serializer):
 
     def clear(self):
         """
-        Close connection to loaded file.
+        Close connection to loaded file, and reset all session data.
         """
 
         # Global session data:
-        if hasattr(self, 'file') and self.file is not None:
+        if hasattr(self, "file") and self.file is not None:
             self.file.close()
             self.file = None
         else:
@@ -361,6 +357,8 @@ class Session(Serializer):
 
         self.orientation = Orientation()
         self.setup = None
+
+        self.extraction_method = ExtractionMethod.ARC_FROM_PTS_OF_AVG_IMG
 
         # Session data by repetition:
         self.extraction_models = {}
@@ -385,13 +383,12 @@ class Session(Serializer):
         if self.file is None:
             return
 
-        session_file_name = get_session_file_path(self.file.path,
-                                                  create_folder=True)
+        session_file_name = get_session_file_path(self.file.path, create_folder=True)
 
-        with h5py.File(session_file_name, 'w') as f:
-            self.serialize(f, 'session', skip=['file'])
+        with h5py.File(session_file_name, "w") as f:
+            self.serialize(f, "session", skip=["file"])
             # Store the current bmlab version
-            f.attrs['version'] = 'bmlab_' + version
+            f.attrs["version"] = "bmlab_" + version
 
     def load(self, h5_file_name):
 
@@ -403,14 +400,13 @@ class Session(Serializer):
         if not is_session_file(session_file_name):
             raise BmlabInvalidFileError(
                 errno.ENOENT,
-                "Could not load the session file '{}'."
-                .format(session_file_name)
+                "Could not load the session file '{}'.".format(session_file_name)
                 + " Please ensure the session file is valid.",
-                session_file_name
+                session_file_name,
             )
 
-        with h5py.File(session_file_name, 'r') as f:
-            new_session = Serializer.deserialize(f['session'])
+        with h5py.File(session_file_name, "r") as f:
+            new_session = Serializer.deserialize(f["session"])
             session = Session.get_instance()
             for var_name, var_value in new_session.__dict__.items():
                 session.__dict__[var_name] = var_value
@@ -434,10 +430,10 @@ class Session(Serializer):
             psm = session.peak_selection_model()
             cm = session.calibration_model()
             evm = session.evaluation_model()
-            if not hasattr(psm, 'brillouin_regions_f'):
+            if not hasattr(psm, "brillouin_regions_f"):
                 evm.invalidate_results()
             # We use the first measurement image here
-            time = session.get_payload_time('0')
+            time = session.get_payload_time("0")
 
             def region_to_region_f(regions, region):
                 region_f = cm.get_frequency_by_time(time, region)
@@ -445,18 +441,14 @@ class Session(Serializer):
                     regions.append(region_f)
                 return regions
 
-            if not hasattr(psm, 'brillouin_regions_f'):
+            if not hasattr(psm, "brillouin_regions_f"):
                 psm.brillouin_regions_f = reduce(
-                    region_to_region_f,
-                    psm.brillouin_regions,
-                    []
+                    region_to_region_f, psm.brillouin_regions, []
                 )
-                delattr(psm, 'brillouin_regions')
+                delattr(psm, "brillouin_regions")
 
-            if not hasattr(psm, 'rayleigh_regions_f'):
+            if not hasattr(psm, "rayleigh_regions_f"):
                 psm.rayleigh_regions_f = reduce(
-                    region_to_region_f,
-                    psm.rayleigh_regions,
-                    []
+                    region_to_region_f, psm.rayleigh_regions, []
                 )
-                delattr(psm, 'rayleigh_regions')
+                delattr(psm, "rayleigh_regions")

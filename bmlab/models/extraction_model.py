@@ -1,9 +1,13 @@
+import logging
 import numpy as np
 from scipy import interpolate
 
 from bmlab.fits import fit_circle
 from bmlab.geometry import Circle, discretize_arc
 from bmlab.serializer import Serializer
+
+
+logger = logging.getLogger(__name__)
 
 
 class ExtractionModel(Serializer):
@@ -13,7 +17,12 @@ class ExtractionModel(Serializer):
         self.arc_width = 2  # [pix] the width of the extraction arc
         self.points = {}
         self.calib_times = {}
+
+        # positions stores the 500 (hard-wired) positions of the arc for a given
+        # calibration key. Each entry is an array of shape (500, num_peaks, 2),
+        # so the last index stores the (x,y) pixel coordinates (but as floats).
         self.positions = {}
+
         self.positions_interpolation = None
 
     def add_point(self, calib_key, time, xdata, ydata):
@@ -58,24 +67,29 @@ class ExtractionModel(Serializer):
         # Check that correct attributes are present
         # @since 0.2.0
         attributes_to_remove = [
-            'circle_fits',
-            'circle_fits_index',
-            'circle_fits_interpolation',
-            'extraction_angles',
-            'extraction_angles_index',
-            'extraction_angles_interpolation'
+            "circle_fits",
+            "circle_fits_index",
+            "circle_fits_interpolation",
+            "extraction_angles",
+            "extraction_angles_index",
+            "extraction_angles_interpolation",
         ]
         for attribute in attributes_to_remove:
             if hasattr(self, attribute):
                 delattr(self, attribute)
-        if not hasattr(self, 'positions'):
+        if not hasattr(self, "positions"):
             self.positions = {}
-        if not hasattr(self, 'positions_interpolation'):
+        if not hasattr(self, "positions_interpolation"):
             self.positions_interpolation = None
         self.update_positions()
 
     def update_positions(self, key=None):
-        if not hasattr(self, 'image_shape') or self.image_shape is None:
+        """Determines the circle fits for each calibration key from
+        the peak points found in the extraction, and discretizes the corresponding
+        arcs.
+        """
+
+        if not hasattr(self, "image_shape") or self.image_shape is None:
             return
         if not key:
             points = self.points.items()
@@ -95,9 +109,9 @@ class ExtractionModel(Serializer):
                 phis = discretize_arc(circle, self.image_shape, num_points=500)
                 if phis is None:
                     continue
-                arc = self.get_arc_from_circle_phis(
-                    circle, phis, self.arc_width)
+                arc = self.get_arc_from_circle_phis(circle, phis, self.arc_width)
                 self.positions[calib_key] = arc
+
             # If we don't have enough points but positions
             # already present for this key, we have probably removed points
             # and clear the positions then
@@ -113,8 +127,7 @@ class ExtractionModel(Serializer):
             return
 
         # Sort calibration keys by time
-        sorted_keys = sorted(self.calib_times,
-                             key=self.calib_times.get)
+        sorted_keys = sorted(self.calib_times, key=self.calib_times.get)
 
         # Create arrays to interpolate
         calib_times_array = []
@@ -132,17 +145,15 @@ class ExtractionModel(Serializer):
         if len(calib_times_array) < 1:
             self.positions_interpolation = None
         elif len(calib_times_array) == 1:
-            self.positions_interpolation =\
-                lambda time: positions_array[0]
+            self.positions_interpolation = lambda time: positions_array[0]
         else:
-            self.positions_interpolation =\
-                interpolate.interp1d(
-                    calib_times_array,
-                    positions_array,
-                    axis=0,
-                    bounds_error=False,
-                    fill_value=(positions_array[0], positions_array[-1])
-                )
+            self.positions_interpolation = interpolate.interp1d(
+                calib_times_array,
+                positions_array,
+                axis=0,
+                bounds_error=False,
+                fill_value=(positions_array[0], positions_array[-1]),
+            )
 
     def get_arc_by_calib_key(self, calib_key):
         """
@@ -195,13 +206,46 @@ class ExtractionModel(Serializer):
     # TODO: This needs to be called automatically
     #  on file load or when the image orientation is changed
     def set_image_shape(self, shape):
-        if not hasattr(self, 'image_shape') or self.image_shape != shape:
+        if not hasattr(self, "image_shape") or self.image_shape != shape:
             self.image_shape = shape
             self.update_positions()
 
     def set_arc_width(self, width):
         self.arc_width = width
         self.update_positions()
+
+    def __str__(self):
+        """Return a string representation of the ExtractionModel instance."""
+        lines = ["ExtractionModel:"]
+
+        if self.image_shape is not None:
+            lines.append(f"  Image shape: {self.image_shape}")
+        else:
+            lines.append("  Image shape: Not set")
+
+        lines.append(f"  Arc width: {self.arc_width} pixels")
+
+        num_calibrations = len(self.points)
+        lines.append(f"  Calibrations: {num_calibrations}")
+
+        if num_calibrations > 0:
+
+            sorted_keys = sorted(self.calib_times.keys(), key=self.calib_times.get)
+            for calib_key in sorted_keys:
+                time = self.calib_times.get(calib_key, "Unknown")
+                num_points = len(self.points.get(calib_key, []))
+                has_positions = calib_key in self.positions
+                lines.append(
+                    f"    - Key {calib_key}: {num_points} points, time={time}, "
+                    f"positions={'computed' if has_positions else 'not computed'}"
+                )
+
+        interpolation_status = (
+            "available" if self.positions_interpolation is not None else "not available"
+        )
+        lines.append(f"  Position interpolation: {interpolation_status}")
+
+        return "\n".join(lines)
 
 
 class CircleFit(Serializer):
