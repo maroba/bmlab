@@ -15,12 +15,12 @@ from pathlib import Path
 
 from packaging import version
 
-BRILLOUIN_GROUP = 'Brillouin'
-FLUORESCENCE_GROUP = 'Fluorescence'
+BRILLOUIN_GROUP = "Brillouin"
+FLUORESCENCE_GROUP = "Fluorescence"
 
 
 def _get_datetime(time_stamp):
-    """ Convert the time stamp in the HDF file to Python datetime """
+    """Convert the time stamp in the HDF file to Python datetime"""
     try:
         return datetime.datetime.fromisoformat(time_stamp)
     except Exception:
@@ -30,17 +30,18 @@ def _get_datetime(time_stamp):
 def is_source_file(path):
     try:
         with h5py.File(path, "r") as h5:
-            file_format = h5.attrs.get('version')
+            file_format = h5.attrs.get("version")
             if file_format is not None:
                 # Is this a file from BrillouinAcquisition?
                 # Then we get an ndarray with a bytes object inside
                 # (because the version attribute is stored
                 # as 'cset=H5T_CSET_ASCII').
-                if isinstance(file_format, np.ndarray)\
-                        and isinstance(file_format[0], bytes):
-                    file_format = file_format[0].decode('ascii')
+                if isinstance(file_format, np.ndarray) and isinstance(
+                    file_format[0], bytes
+                ):
+                    file_format = file_format[0].decode("ascii")
                 # This is from BrillouinAcquisition!
-                if file_format.startswith('H5BM'):
+                if file_format.startswith("H5BM"):
                     return True
         return False
     except Exception:
@@ -51,17 +52,17 @@ def is_session_file(path):
     try:
         path = Path(path)
         with h5py.File(path, "r") as h5:
-            file_format = h5.attrs.get('version')
+            file_format = h5.attrs.get("version")
             if file_format is not None:
                 # This is a bmlab session file created
                 # with bmlab>=0.0.14
-                if isinstance(file_format, str)\
-                        and file_format.startswith('bmlab'):
+                if isinstance(file_format, str) and file_format.startswith("bmlab"):
                     return True
 
             # This is a bmlab session file created with bmlab<0.0.14
-            if 'session' in h5.keys()\
-                    and h5['session'].attrs.get('type').startswith('bmlab'):
+            if "session" in h5.keys() and h5["session"].attrs.get("type").startswith(
+                "bmlab"
+            ):
                 return True
         return False
     except Exception:
@@ -86,37 +87,34 @@ class BrillouinFile(object):
         """
         self.path = Path(path).resolve()
         self.file = None
-        self.file = h5py.File(self.path, 'r')
-        self.file_version_string = self.file.attrs.get('version')[
-            0].decode('utf-8')
-        if not self.file_version_string.startswith('H5BM'):
-            raise BadFileException('File does not contain any Brillouin data')
+        self.file = h5py.File(self.path, "r")
+        self.file_version_string = self.file.attrs.get("version")[0].decode("utf-8")
+        if not self.file_version_string.startswith("H5BM"):
+            raise BadFileException("File does not contain any Brillouin data")
         self.file_version = self.file_version_string[-5:]
         # Fluorescence group is optional
         self.Fluorescence_group = None
 
         if version.parse(self.file_version) >= version.parse("0.0.4"):
-            """"
+            """ "
             New Brillouin file format,
             supporting different modes and repetitions
             """
             if BRILLOUIN_GROUP not in self.file:
-                raise BadFileException(
-                    'File does not contain any Brillouin data')
+                raise BadFileException("File does not contain any Brillouin data")
             self.Brillouin_group = self.file[BRILLOUIN_GROUP]
 
             if FLUORESCENCE_GROUP in self.file:
                 self.Fluorescence_group = self.file[FLUORESCENCE_GROUP]
         else:
-            """ Old Brillouin file format """
+            """Old Brillouin file format"""
             self.Brillouin_group = self.file
         # Comments are optional,
         # e.g. for files containing only fluorescence data
-        comment = self.file.attrs.get('comment')
+        comment = self.file.attrs.get("comment")
         if comment is not None:
-            self.comment = comment[0].decode('utf-8')
-        self.date = _get_datetime(
-            self.file.attrs.get('date')[0].decode('utf-8'))
+            self.comment = comment[0].decode("utf-8")
+        self.date = _get_datetime(self.file.attrs.get("date")[0].decode("utf-8"))
 
     def __del__(self):
         """
@@ -134,8 +132,7 @@ class BrillouinFile(object):
     def checkMode(mode):
         modes = [BRILLOUIN_GROUP, FLUORESCENCE_GROUP]
         if mode not in modes:
-            raise NotImplementedError(
-                'The mode "{}" is not supported.'.format(mode))
+            raise NotImplementedError('The mode "{}" is not supported.'.format(mode))
 
     def repetition_count(self, mode=BRILLOUIN_GROUP):
         """
@@ -166,7 +163,7 @@ class BrillouinFile(object):
         if version.parse(self.file_version) >= version.parse("0.0.4"):
             return list(mode_group.keys())
         elif mode == BRILLOUIN_GROUP:
-            return list(['0'])
+            return list(["0"])
         else:
             return []
 
@@ -211,10 +208,9 @@ class Repetition(object):
             The HDF group representing a Repetition. Consists of payload,
             calibration and background.
         """
-        self.date = _get_datetime(
-            repetition_group.attrs.get('date')[0].decode('utf-8'))
-        self.payload = Payload(repetition_group.get('payload'), self)
-        calibration_group = repetition_group.get('calibration')
+        self.date = _get_datetime(repetition_group.attrs.get("date")[0].decode("utf-8"))
+        self.payload = Payload(repetition_group.get("payload"), self)
+        calibration_group = repetition_group.get("calibration")
         # Having a calibration is optional for a repetition
         if calibration_group is not None:
             self.calibration = Calibration(calibration_group, self)
@@ -237,7 +233,7 @@ class MeasurementData(object):
         self.repetition = repetition
         self.group = payload_group
         if payload_group is not None:
-            self.data = payload_group.get('data')
+            self.data = payload_group.get("data")
         else:
             self.data = None
 
@@ -256,7 +252,16 @@ class MeasurementData(object):
             Keys of images in payload.
         """
         if self.data:
-            keys = list(self.data.keys())
+            # Filter to only include keys that can be converted to integers
+            keys = []
+            for key in self.data.keys():
+                try:
+                    int(key)
+                    keys.append(key)
+                except ValueError:
+                    # Skip non-integer keys (e.g., "voltages")
+                    continue
+
             if not sort_by_time:
                 return keys
 
@@ -293,15 +298,16 @@ class MeasurementData(object):
         return imgs.shape[0]
 
     def get_date(self, image_key):
-        """"
+        """ "
         Returns the date of an image
         with the given key
         """
         try:
             return _get_datetime(
-                self.data.get(image_key).attrs.get('date')[0].decode('utf-8'))
+                self.data.get(image_key).attrs.get("date")[0].decode("utf-8")
+            )
         except Exception:
-            return ''
+            return ""
 
     def get_time(self, image_key):
         try:
@@ -318,71 +324,70 @@ class MeasurementData(object):
         return self.data is None or len(self.data) == 0
 
     def get_exposure(self, image_key):
-        """"
+        """ "
         Returns the exposure time of a payload image
         with the given key
         """
         try:
-            return self.data.get(image_key).attrs\
-                .get('exposure')[0]
+            return self.data.get(image_key).attrs.get("exposure")[0]
         except Exception:
             # For older files we return a default value
             return 0.5
 
     def get_binning(self, image_key):
-        """"
+        """ "
         Returns the binning of a payload image
         with the given key
         """
         try:
-            return self.data.get(image_key).attrs\
-                .get('binning')[0].decode('utf-8')
+            return self.data.get(image_key).attrs.get("binning")[0].decode("utf-8")
         except Exception:
             # For older files we return a default value
-            return '1x1'
+            return "1x1"
 
     def get_binning_factor(self, image_key):
         binning = self.get_binning(image_key)
         # We only check the values possible
         # with BrillouinAcquisition
-        if binning == '2x2':
+        if binning == "2x2":
             return 2
-        elif binning == '4x4':
+        elif binning == "4x4":
             return 4
-        elif binning == '8x8':
+        elif binning == "8x8":
             return 8
         return 1
 
     def get_channel(self, image_key):
-        """"
+        """ "
         Returns the channel of a payload image
         with the given key
         """
         try:
-            return self.data.get(image_key).attrs\
-                .get('channel')[0].decode('utf-8')
+            return self.data.get(image_key).attrs.get("channel")[0].decode("utf-8")
         except Exception:
             return None
 
     def get_class(self, image_key):
-        """"
+        """ "
         Returns the image class of a payload image
         with the given key
         """
         try:
-            return self.data.get(image_key).attrs\
-                .get('IMAGE_SUBCLASS')[0].decode('utf-8')
+            return (
+                self.data.get(image_key).attrs.get("IMAGE_SUBCLASS")[0].decode("utf-8")
+            )
         except Exception:
             return None
 
     def get_mode(self, image_key):
-        """"
+        """ "
         Returns the interlace mode of a payload image
         with the given key
         """
         try:
-            return self.data.get(image_key).attrs\
-                .get('INTERLACE_MODE')[0].decode('utf-8')
+            return (
+                self.data.get(image_key).attrs.get("INTERLACE_MODE")[0].decode("utf-8")
+            )
         except Exception:
             return None
 
@@ -401,14 +406,21 @@ class MeasurementData(object):
         # Older measurements didn't save this information,
         # so we wrap it in a try/except
         try:
-            attributes = ['left', 'right',
-                          'bottom', 'top',
-                          'width_physical', 'height_physical',
-                          'width_binned', 'height_binned']
+            attributes = [
+                "left",
+                "right",
+                "bottom",
+                "top",
+                "width_physical",
+                "height_physical",
+                "width_binned",
+                "height_binned",
+            ]
             roi = dict()
             for attribute in attributes:
-                roi[attribute] =\
-                    self.data.get(image_key).attrs.get('ROI_' + attribute)[0]
+                roi[attribute] = self.data.get(image_key).attrs.get("ROI_" + attribute)[
+                    0
+                ]
 
             return roi
         except BaseException:
@@ -431,12 +443,14 @@ class Payload(MeasurementData):
         super(Payload, self).__init__(payload_group, repetition)
         # Only Brillouin payloads have a resolution and positions
         try:
-            self.resolution = tuple(int(payload_group.attrs.get(
-                'resolution-%s' % axis)[0]) for axis in ['x', 'y', 'z'])
+            self.resolution = tuple(
+                int(payload_group.attrs.get("resolution-%s" % axis)[0])
+                for axis in ["x", "y", "z"]
+            )
             self.positions = {
-                'x': np.array(payload_group.get('positions-x')),
-                'y': np.array(payload_group.get('positions-y')),
-                'z': np.array(payload_group.get('positions-z')),
+                "x": np.array(payload_group.get("positions-x")),
+                "y": np.array(payload_group.get("positions-y")),
+                "z": np.array(payload_group.get("positions-z")),
             }
         except BaseException:
             self.resolution = None
@@ -444,17 +458,20 @@ class Payload(MeasurementData):
 
     def get_scale_calibration(self):
         parameters = [
-            'micrometerToPixX', 'micrometerToPixY',
-            'pixToMicrometerX', 'pixToMicrometerY',
-            'positionScanner', 'positionStage', 'origin'
+            "micrometerToPixX",
+            "micrometerToPixY",
+            "pixToMicrometerX",
+            "pixToMicrometerY",
+            "positionScanner",
+            "positionStage",
+            "origin",
         ]
         try:
-            cal = self.group.get('scaleCalibration')
+            cal = self.group.get("scaleCalibration")
             scaleCal = dict()
             for attribute in parameters:
                 val = cal.get(attribute)
-                scaleCal[attribute] = \
-                    tuple(val.attrs.get(dim)[0] for dim in ['x', 'y'])
+                scaleCal[attribute] = tuple(val.attrs.get(dim)[0] for dim in ["x", "y"])
 
             return scaleCal
         except BaseException:
@@ -479,7 +496,7 @@ class Calibration(MeasurementData):
         there was an inconsistency with the group naming
         """
         if self.data is None and payload_group is not None:
-            self.data = payload_group.get('calibrationData')
+            self.data = payload_group.get("calibrationData")
 
 
 class BadFileException(Exception):

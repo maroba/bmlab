@@ -174,12 +174,9 @@ class ExtractionController(object):
             cluster_array = np.array(cluster)
             mean_point = np.mean(cluster_array, axis=0)
 
-            # TODO: Think about this approach:
-            # Should we really reduce the outer clusters to single points
-            # or should we better add these single points with their statistical weight?
-            # for _ in range(len(cluster)):
-            #    reduced_points.append((mean_point[0], mean_point[1]))
-            reduced_points.append((mean_point[0], mean_point[1]))
+            # Keep the statistical weight for the outer clusters:
+            for _ in range(len(cluster)):
+                reduced_points.append((mean_point[0], mean_point[1]))
 
         logger.info(f"Total points after reduction: {len(reduced_points)}")
         return reduced_points
@@ -299,10 +296,12 @@ class CalibrationController(ImageController):
     def find_peaks(
         self, calib_key, min_prominence=15, num_brillouin_samples=2, min_height=15
     ):
+        logger.info(f"Finding peaks for calibration {calib_key}")
         spectra, _, _ = self.extract_spectra(calib_key)
         if spectra is None:
             return
         spectrum = np.mean(spectra, axis=0)
+
         # This is the background value
         base = np.nanmedian(spectrum)
         peaks, properties = find_peaks(
