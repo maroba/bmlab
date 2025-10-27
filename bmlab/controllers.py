@@ -1,4 +1,6 @@
 import logging
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from functools import partial
 
 import numpy as np
 from scipy.signal import medfilt2d, find_peaks
@@ -57,16 +59,26 @@ class ExtractionController(object):
             # Warning: x-axis in imshow is 1-axis in img, y-axis is 0-axis
             em.add_point(calib_key, time, new_point[0], new_point[1])
 
-    def find_points_all(self):
+    def find_points_all(self, use_threading=True, max_workers=None):
         calib_keys = self.session.get_calib_keys()
 
         if not calib_keys:
             return
 
         for calib_key in calib_keys:
-            self.find_points(calib_key)
+            self.find_points(
+                calib_key, use_threading=use_threading, max_workers=max_workers
+            )
 
-    def find_points(self, calib_key, min_height=10, min_area=20, max_distance=50):
+    def find_points(
+        self,
+        calib_key,
+        min_height=10,
+        min_area=20,
+        max_distance=50,
+        use_threading=True,
+        max_workers=None,
+    ):
 
         imgs = self.session.get_calibration_image(calib_key)
         if imgs is None:
@@ -80,21 +92,29 @@ class ExtractionController(object):
             # Average over all images in the calibration and only use this image for peak finding
             imgs = [np.nanmean(imgs, axis=0)]
 
+        # Account for binning for default values
+        disc_size = 10
+        binning = self.session.get_calibration_binning_factor(calib_key)
+        if binning:
+            max_distance = max_distance / binning
+            disc_size = disc_size / binning
+            min_area = min_area / (binning**2)
+
         peaks = []
-        for img in imgs:
-            # Account for binning for default values
-            disc_size = 10
-            binning = self.session.get_calibration_binning_factor(calib_key)
-            if binning:
-                max_distance = max_distance / binning
-                disc_size = disc_size / binning
-                min_area = min_area / (binning**2)
 
-            img = medfilt2d(img)
-
-            peaks += self._get_peaks_from_image(
-                img, min_height, min_area, max_distance, disc_size
+        # Process images in parallel using ThreadPoolExecutor if enabled and beneficial
+        if use_threading and len(imgs) > 1:
+            # Use threading for multiple images
+            peaks = self._process_images_threaded(
+                imgs, min_height, min_area, max_distance, disc_size, max_workers
             )
+        else:
+            # Single image or threading disabled - process directly
+            for img in imgs:
+                img = medfilt2d(img)
+                peaks += self._get_peaks_from_image(
+                    img, min_height, min_area, max_distance, disc_size
+                )
 
         # Add found peaks to model
         em = self.session.extraction_model()
@@ -104,6 +124,70 @@ class ExtractionController(object):
         em.set_points(calib_key, time, peaks)
         logger.info(f"Found {len(peaks)} points for calibration {calib_key}")
         logger.info(f"Extraction model: \n{em}")
+
+    def _process_images_threaded(
+        self, imgs, min_height, min_area, max_distance, disc_size, max_workers=None
+    ):
+        """Process multiple images in parallel using ThreadPoolExecutor"""
+
+        # Determine optimal number of workers
+        if max_workers is None:
+            # Use min of 4 threads, but don't exceed number of images
+            import os
+
+            max_workers = min(4, os.cpu_count() or 1, len(imgs))
+
+        logger.info(f"Processing {len(imgs)} images using {max_workers} threads")
+
+        # Create a partial function with fixed parameters
+        process_single_image = partial(
+            self._process_single_image_for_threading,
+            min_height=min_height,
+            min_area=min_area,
+            max_distance=max_distance,
+            disc_size=disc_size,
+        )
+
+        all_peaks = []
+
+        # Process images in batches using ThreadPoolExecutor
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            # Submit all tasks
+            future_to_idx = {
+                executor.submit(process_single_image, img): idx
+                for idx, img in enumerate(imgs)
+            }
+
+            # Collect results as they complete
+            results = [None] * len(imgs)  # Preserve order
+            for future in as_completed(future_to_idx):
+                idx = future_to_idx[future]
+                try:
+                    peaks = future.result()
+                    results[idx] = peaks
+                except Exception as exc:
+                    logger.error(f"Image {idx} generated an exception: {exc}")
+                    results[idx] = []
+
+            # Flatten results while preserving order
+            for peaks in results:
+                if peaks is not None:
+                    all_peaks.extend(peaks)
+
+        return all_peaks
+
+    def _process_single_image_for_threading(
+        self, img, min_height, min_area, max_distance, disc_size
+    ):
+        """Process a single image for threading - wrapper around _get_peaks_from_image"""
+        try:
+            filtered_img = medfilt2d(img)
+            return self._get_peaks_from_image(
+                filtered_img, min_height, min_area, max_distance, disc_size
+            )
+        except Exception as e:
+            logger.error(f"Error processing image: {e}")
+            return []
 
     def _get_peaks_from_image(self, img, min_height, min_area, max_distance, disc_size):
         """Returns iterator with peak coordinates (row, col) found in the image"""
