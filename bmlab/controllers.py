@@ -238,6 +238,51 @@ class ExtractionController(object):
             )
         )
 
+    def _perform_hierarchical_clustering(self, points_array, distance_threshold=10):
+        """Perform hierarchical clustering on 2D points array.
+
+        Args:
+            points_array: numpy array of shape (n_points, 2)
+            distance_threshold: threshold for clustering
+
+        Returns:
+            tuple: (labels, unique_labels, cluster_info)
+                - labels: cluster labels for each point
+                - unique_labels: unique cluster labels
+                - cluster_info: list of (label, center) tuples
+        """
+        labels = fclusterdata(
+            points_array, t=distance_threshold, criterion="distance", method="single"
+        )
+        unique_labels = np.unique(labels)
+
+        cluster_info = []
+        for label in unique_labels:
+            mask = labels == label
+            cluster_points = points_array[mask]
+            center = np.mean(cluster_points, axis=0)
+            cluster_info.append((label, center))
+
+        return labels, unique_labels, cluster_info
+
+    def _compute_pca_principal_direction(self, points_array):
+        """Compute the principal direction using PCA on 2D points.
+
+        Args:
+            points_array: numpy array of shape (n_points, 2)
+
+        Returns:
+            tuple: (pca_mean, principal_direction)
+                - pca_mean: mean of the points
+                - principal_direction: first principal component vector
+        """
+        pca_mean = np.mean(points_array, axis=0)
+        centered_points = points_array - pca_mean
+        cov_matrix = np.cov(centered_points.T)
+        eigenvalues, eigenvectors = np.linalg.eig(cov_matrix)
+        principal_direction = eigenvectors[:, np.argmax(eigenvalues)]
+        return pca_mean, principal_direction
+
     def _remove_non_zeroth_order_peaks(self, peaks, intensities):
         """Remove peaks that are not part of the zeroth order spectrum, if present.
 
@@ -266,21 +311,21 @@ class ExtractionController(object):
         intensities_array = np.array(intensities)
 
         # Perform hierarchical clustering on peak positions
-        labels = fclusterdata(peaks_array, t=10, criterion="distance", method="single")
-        unique_labels = np.unique(labels)
+        labels, unique_labels, cluster_centers = self._perform_hierarchical_clustering(
+            peaks_array, distance_threshold=10
+        )
 
         if len(unique_labels) < 3:
             logger.info("Too few clusters for filtering, keeping all peaks")
             return peaks
 
-        # Calculate mean intensity and center position for each cluster
+        # Calculate mean intensity for each cluster
         cluster_info = []
-        for label in unique_labels:
+        for label, center in cluster_centers:
             mask = labels == label
             cluster_peaks = peaks_array[mask]
             cluster_intensities = intensities_array[mask]
             mean_intensity = np.mean(cluster_intensities)
-            center = np.mean(cluster_peaks, axis=0)
             cluster_info.append((label, center, mean_intensity, mask))
 
         # Sort clusters by mean intensity (descending)
@@ -297,12 +342,9 @@ class ExtractionController(object):
             f"Main cluster 2: center={main_cluster_2[1]}, intensity={main_cluster_2[2]}"
         )
 
-        # Find the principal direction using PCA on all peaks
-        pca_mean = np.mean(peaks_array, axis=0)
-        centered_points = peaks_array - pca_mean
-        cov_matrix = np.cov(centered_points.T)
-        eigenvalues, eigenvectors = np.linalg.eig(cov_matrix)
-        principal_direction = eigenvectors[:, np.argmax(eigenvalues)]
+        pca_mean, principal_direction = self._compute_pca_principal_direction(
+            peaks_array
+        )
 
         # Project main cluster centers onto the principal direction
         main_center_1 = main_cluster_1[1]
@@ -385,27 +427,17 @@ class ExtractionController(object):
         points_array = np.array(points)
 
         # Perform hierarchical clustering
-        labels = fclusterdata(points_array, t=20, criterion="distance", method="single")
-
-        unique_labels = np.unique(labels)
+        labels, unique_labels, cluster_info = self._perform_hierarchical_clustering(
+            points_array, distance_threshold=20
+        )
 
         if len(unique_labels) < 2:
             return points, []
 
-        # Calculate center of each cluster
-        cluster_info = []
-        for label in unique_labels:
-            mask = labels == label
-            cluster_points = points_array[mask]
-            center = np.mean(cluster_points, axis=0)
-            cluster_info.append((label, center))
-
         # Find the principal direction using PCA
-        pca_mean = np.mean(points_array, axis=0)
-        centered_points = points_array - pca_mean
-        cov_matrix = np.cov(centered_points.T)
-        eigenvalues, eigenvectors = np.linalg.eig(cov_matrix)
-        principal_direction = eigenvectors[:, np.argmax(eigenvalues)]
+        pca_mean, principal_direction = self._compute_pca_principal_direction(
+            points_array
+        )
 
         # Project each cluster center onto the principal direction
         projections = []
