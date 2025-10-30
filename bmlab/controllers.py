@@ -105,7 +105,7 @@ class ExtractionController(object):
         # Process images in parallel using ThreadPoolExecutor if enabled and beneficial
         if use_threading and len(imgs) > 1:
             # Use threading for multiple images
-            peaks = self._process_images_threaded(
+            peaks, intensities = self._process_images_threaded(
                 imgs, min_height, min_area, max_distance, disc_size, max_workers
             )
         else:
@@ -119,6 +119,7 @@ class ExtractionController(object):
         # Add found peaks to model
         em = self.session.extraction_model()
         if self.session.extraction_method == ExtractionMethod.ARC_FROM_PTS_OF_ALL_IMGS:
+            peaks = self._remove_non_zeroth_order_peaks(peaks, intensities)
             peaks = self._reduce_outer_clusters_to_single_points(peaks)
 
         em.set_points(calib_key, time, peaks)
@@ -149,6 +150,7 @@ class ExtractionController(object):
         )
 
         all_peaks = []
+        peak_intensities = []
 
         # Process images in batches using ThreadPoolExecutor
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
@@ -163,18 +165,20 @@ class ExtractionController(object):
             for future in as_completed(future_to_idx):
                 idx = future_to_idx[future]
                 try:
-                    peaks = future.result()
-                    results[idx] = peaks
+                    peaks, intensities = future.result()
+                    results[idx] = (peaks, intensities)
                 except Exception as exc:
                     logger.error(f"Image {idx} generated an exception: {exc}")
-                    results[idx] = []
+                    results[idx] = ([], [])
 
             # Flatten results while preserving order
-            for peaks in results:
-                if peaks is not None:
+            for result in results:
+                if result is not None:
+                    peaks, intensities = result
                     all_peaks.extend(peaks)
+                    peak_intensities.extend(intensities)
 
-        return all_peaks
+        return all_peaks, peak_intensities
 
     def _process_single_image_for_threading(
         self, img, min_height, min_area, max_distance, disc_size
@@ -182,12 +186,14 @@ class ExtractionController(object):
         """Process a single image for threading - wrapper around _get_peaks_from_image"""
         try:
             filtered_img = medfilt2d(img)
-            return self._get_peaks_from_image(
+            peaks = self._get_peaks_from_image(
                 filtered_img, min_height, min_area, max_distance, disc_size
             )
+            intensities = [filtered_img[p] for p in peaks]
+            return peaks, intensities
         except Exception as e:
             logger.error(f"Error processing image: {e}")
-            return []
+            return [], []
 
     def _get_peaks_from_image(self, img, min_height, min_area, max_distance, disc_size):
         """Returns iterator with peak coordinates (row, col) found in the image"""
@@ -231,6 +237,111 @@ class ExtractionController(object):
                 all_peaks,
             )
         )
+
+    def _remove_non_zeroth_order_peaks(self, peaks, intensities):
+        """Remove peaks that are not part of the zeroth order spectrum, if present.
+
+        Arguments:
+
+        peaks: list of (row, col) tuples
+        intensities: list of intensity values corresponding to the peaks
+
+        Returns:
+
+        Filtered list of peaks
+        """
+        logger.info(
+            "Remove peaks that are not part of the zeroth order spectrum, if present"
+        )
+        if len(intensities) != len(peaks):
+            logger.error("Mismatch between peaks and intensities")
+            return peaks
+
+        if len(peaks) < 3:
+            logger.info("Too few peaks for filtering, keeping all")
+            return peaks
+
+        # Convert to numpy arrays for easier manipulation
+        peaks_array = np.array(peaks)
+        intensities_array = np.array(intensities)
+
+        # Perform hierarchical clustering on peak positions
+        labels = fclusterdata(peaks_array, t=10, criterion="distance", method="single")
+        unique_labels = np.unique(labels)
+
+        if len(unique_labels) < 3:
+            logger.info("Too few clusters for filtering, keeping all peaks")
+            return peaks
+
+        # Calculate mean intensity and center position for each cluster
+        cluster_info = []
+        for label in unique_labels:
+            mask = labels == label
+            cluster_peaks = peaks_array[mask]
+            cluster_intensities = intensities_array[mask]
+            mean_intensity = np.mean(cluster_intensities)
+            center = np.mean(cluster_peaks, axis=0)
+            cluster_info.append((label, center, mean_intensity, mask))
+
+        # Sort clusters by mean intensity (descending)
+        cluster_info.sort(key=lambda x: x[2], reverse=True)
+
+        # Get the two main clusters with highest mean intensity
+        main_cluster_1 = cluster_info[0]
+        main_cluster_2 = cluster_info[1]
+
+        logger.info(
+            f"Main cluster 1: center={main_cluster_1[1]}, intensity={main_cluster_1[2]}"
+        )
+        logger.info(
+            f"Main cluster 2: center={main_cluster_2[1]}, intensity={main_cluster_2[2]}"
+        )
+
+        # Find the principal direction using PCA on all peaks
+        pca_mean = np.mean(peaks_array, axis=0)
+        centered_points = peaks_array - pca_mean
+        cov_matrix = np.cov(centered_points.T)
+        eigenvalues, eigenvectors = np.linalg.eig(cov_matrix)
+        principal_direction = eigenvectors[:, np.argmax(eigenvalues)]
+
+        # Project main cluster centers onto the principal direction
+        main_center_1 = main_cluster_1[1]
+        main_center_2 = main_cluster_2[1]
+
+        proj_1 = np.dot(main_center_1 - pca_mean, principal_direction)
+        proj_2 = np.dot(main_center_2 - pca_mean, principal_direction)
+
+        # Ensure proj_1 < proj_2 for easier range checking
+        if proj_1 > proj_2:
+            proj_1, proj_2 = proj_2, proj_1
+            main_cluster_1, main_cluster_2 = main_cluster_2, main_cluster_1
+
+        # Keep peaks from main clusters and clusters located between them
+        filtered_peaks = []
+        kept_clusters = []
+
+        for label, center, mean_intensity, mask in cluster_info:
+            proj = np.dot(center - pca_mean, principal_direction)
+
+            # Keep main clusters
+            if label == main_cluster_1[0] or label == main_cluster_2[0]:
+                cluster_peaks = [tuple(peak) for peak in peaks_array[mask]]
+                filtered_peaks.extend(cluster_peaks)
+                kept_clusters.append(f"main (intensity={mean_intensity:.1f})")
+            # Keep clusters between main clusters
+            elif proj_1 <= proj <= proj_2:
+                cluster_peaks = [tuple(peak) for peak in peaks_array[mask]]
+                filtered_peaks.extend(cluster_peaks)
+                kept_clusters.append(f"between (intensity={mean_intensity:.1f})")
+            else:
+                logger.info(
+                    f"Filtering out cluster with center={center}, intensity={mean_intensity:.1f}, projection={proj:.1f}"
+                )
+
+        logger.info(f"Kept {len(kept_clusters)} clusters: {kept_clusters}")
+        logger.info(f"Filtered peaks: {len(peaks)} -> {len(filtered_peaks)}")
+
+        return filtered_peaks
 
     def _reduce_outer_clusters_to_single_points(self, points):
         logger.info(
@@ -384,7 +495,11 @@ class CalibrationController(ImageController):
         spectra, _, _ = self.extract_spectra(calib_key)
         if spectra is None:
             return
+
+        # TODO: This is only correct in the old methodology.
         spectrum = np.mean(spectra, axis=0)
+
+        # TODO: The rest of the function should be extracted
 
         # This is the background value
         base = np.nanmedian(spectrum)
