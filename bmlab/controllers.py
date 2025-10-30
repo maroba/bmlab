@@ -101,6 +101,7 @@ class ExtractionController(object):
             min_area = min_area / (binning**2)
 
         peaks = []
+        intensities = []
 
         # Process images in parallel using ThreadPoolExecutor if enabled and beneficial
         if use_threading and len(imgs) > 1:
@@ -112,9 +113,13 @@ class ExtractionController(object):
             # Single image or threading disabled - process directly
             for img in imgs:
                 img = medfilt2d(img)
-                peaks += self._get_peaks_from_image(
+                img_peaks = self._get_peaks_from_image(
                     img, min_height, min_area, max_distance, disc_size
                 )
+                peaks += img_peaks
+                # Get intensities for the found peaks
+                for peak in img_peaks:
+                    intensities.append(img[peak])
 
         # Add found peaks to model
         em = self.session.extraction_model()
