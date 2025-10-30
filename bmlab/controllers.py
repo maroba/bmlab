@@ -533,10 +533,30 @@ class CalibrationController(ImageController):
         if spectra is None:
             return
 
-        # TODO: This is only correct in the old methodology.
-        spectrum = np.mean(spectra, axis=0)
+        if self.session.extraction_method == ExtractionMethod.ARC_FROM_PTS_OF_ALL_IMGS:
+            ...
+        else:
+            spectrum = np.mean(spectra, axis=0)
+            regions_brillouin, regions_rayleigh = self._find_peaks_in_single_image(
+                spectrum, min_prominence, num_brillouin_samples, min_height
+            )
 
-        # TODO: The rest of the function should be extracted
+        cm = self.session.calibration_model()
+        logger.info("Adding Brillouin regions")
+        for i, region in enumerate(regions_brillouin):
+            logger.info(f"Calib {calib_key}, Brillouin region {i}: {region}")
+            # We use "set_brillouin_region" here so overlapping
+            # regions don't get merged
+            cm.set_brillouin_region(calib_key, i, region)
+        logger.info("Adding Brillouin regions")
+        for i, region in enumerate(regions_rayleigh):
+            # We use "set_brillouin_region" here so overlapping
+            # regions don't get merged
+            cm.set_rayleigh_region(calib_key, i, region)
+
+    def _find_peaks_in_single_image(
+        self, spectrum, min_prominence, num_brillouin_samples, min_height
+    ):
 
         # This is the background value
         base = np.nanmedian(spectrum)
@@ -621,17 +641,7 @@ class CalibrationController(ImageController):
 
         regions_rayleigh = map(peak_to_region, indices_rayleigh)
 
-        cm = self.session.calibration_model()
-        # Add Brillouin regions
-        for i, region in enumerate(regions_brillouin):
-            # We use "set_brillouin_region" here so overlapping
-            # regions don't get merged
-            cm.set_brillouin_region(calib_key, i, region)
-        # Add Rayleigh regions
-        for i, region in enumerate(regions_rayleigh):
-            # We use "set_brillouin_region" here so overlapping
-            # regions don't get merged
-            cm.set_rayleigh_region(calib_key, i, region)
+        return regions_brillouin, regions_rayleigh
 
     def calibrate(self, calib_key, count=None, max_count=None):
 
