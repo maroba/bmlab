@@ -21,6 +21,7 @@ class CalibrationModel(Serializer):
 
         self.vipa_params = {}
         self.frequencies = {}
+        self.voltages = {}
 
         self.frequency_by_calib_key_interpolators = {}
         self.frequencies_by_time_interpolator = None
@@ -188,6 +189,43 @@ class CalibrationModel(Serializer):
     def clear_vipa_params(self, calib_key):
         if calib_key in self.vipa_params:
             del self.vipa_params[calib_key]
+
+    def set_voltages(self, calib_key, voltages):
+        """
+        Store the voltages array for a given calibration.
+
+        Parameters
+        ----------
+        calib_key: The calibration key
+        voltages: numpy.ndarray of voltage values
+        """
+        self.voltages[calib_key] = voltages
+
+    def get_voltages(self, calib_key):
+        """
+        Returns the voltages array for a given calibration.
+
+        Parameters
+        ----------
+        calib_key: The calibration key
+
+        Returns
+        -------
+        numpy.ndarray or None
+            The voltages array, or None if not available
+        """
+        return self.voltages.get(calib_key)
+
+    def clear_voltages(self, calib_key):
+        """
+        Clear the voltages for a given calibration.
+
+        Parameters
+        ----------
+        calib_key: The calibration key
+        """
+        if calib_key in self.voltages:
+            del self.voltages[calib_key]
 
     def set_frequencies(self, calib_key, time, frequencies):
         self.frequencies[calib_key] = frequencies

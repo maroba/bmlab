@@ -724,7 +724,14 @@ class CalibrationController(ImageController):
         for frame_num, spectrum in enumerate(spectra):
             peaks = cm.get_sorted_peaks(calib_key, frame_num)
 
-            params = fit_vipa(peaks, setup)
+            if callable(setup.calibration.shifts):
+                voltage = self.session.get_calibration_voltages(calib_key)[frame_num]
+                shift_ = setup.calibration.shifts(voltage)
+                expected_shifts = [0, shift_ * 1e9, -shift_ * 1e9, 0]
+            else:
+                expected_shifts = setup.calibration.shifts
+
+            params = fit_vipa(peaks, setup, expected_shifts)
             if params is None:
                 continue
             vipa_params.append(params)
@@ -736,6 +743,8 @@ class CalibrationController(ImageController):
 
         cm.set_vipa_params(calib_key, vipa_params)
         cm.set_frequencies(calib_key, time, frequencies)
+
+        logger.info(f"Calibrated calib_key {calib_key} with {len(vipa_params)} frames.")
 
         evm = self.session.evaluation_model()
         if evm is not None:
@@ -761,9 +770,6 @@ class CalibrationController(ImageController):
 
         cm.clear_rayleigh_fits(calib_key)
         for frame_num, spectrum in enumerate(spectra):
-            logger.info(
-                f"Fitting Rayleigh regions for calibration {calib_key}, frame {frame_num}"
-            )
 
             # Get regions for this specific frame, fallback to frame 0
             regions = cm.get_rayleigh_regions(calib_key, frame_num=frame_num)
@@ -788,9 +794,6 @@ class CalibrationController(ImageController):
 
         cm.clear_brillouin_fits(calib_key)
         for frame_num, spectrum in enumerate(spectra):
-            logger.info(
-                f"Fitting Brillouin regions for calibration {calib_key}, frame {frame_num} with num_brillouin_samples={setup.calibration.num_brillouin_samples}"
-            )
             # Get regions for this specific frame, fallback to frame 0
             regions = cm.get_brillouin_regions(calib_key, frame_num=frame_num)
             if not regions and frame_num != 0:
@@ -828,8 +831,15 @@ class CalibrationController(ImageController):
         ):
             return None
 
+        if callable(self.session.setup.calibration.shifts):
+            voltage = self.session.get_calibration_voltages(calib_key)[current_frame]
+            shift_ = self.session.setup.calibration.shifts(voltage)
+            expected_shifts = [0, shift_ * 1e9, -shift_ * 1e9, 0]
+        else:
+            expected_shifts = self.session.setup.calibration.shifts
+
         return (
-            self.session.setup.calibration.shifts
+            expected_shifts
             + self.session.setup.calibration.orders
             * cm.vipa_params[calib_key][current_frame][3]
         )

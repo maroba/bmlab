@@ -489,7 +489,7 @@ def are_points_on_line(points):
     return True
 
 
-def fit_vipa(peaks, setup):
+def fit_vipa(peaks, setup, expected_shifts=None):
     """
     Fits the VIPA frequency axis
 
@@ -506,6 +506,7 @@ def fit_vipa(peaks, setup):
     if peaks is None:
         return
     if len(peaks) < (setup.calibration.num_brillouin_samples * 2 + 2):
+        logger.warning("Not enough peaks found for VIPA fit.")
         return
 
     # Calculate the start parameters for the VIPA fit
@@ -557,8 +558,11 @@ def fit_vipa(peaks, setup):
 
         return np.sum(d1**2) + np.sum(d2**2) + np.sum(d3**2)
 
-    opt_result = fmin(error, vipa_start, args=(peaks, setup.calibration.shifts))
-
+    logger.debug(f"VIPA fit: vipa_start = {vipa_start}")
+    logger.debug(f"VIPA fit: peaks = {peaks}")
+    logger.debug(f"VIPA fit: shifts = {expected_shifts}")
+    opt_result = fmin(error, vipa_start, args=(peaks, expected_shifts))
+    logger.debug(f"VIPA fit: opt_result = {opt_result}")
     return opt_result[0], opt_result[1], opt_result[2], opt_result[3]
 
 

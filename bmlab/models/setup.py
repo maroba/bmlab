@@ -135,6 +135,14 @@ class Setup(Serializer):
         return 2 * cos(self.vipa.theta / 2) * n * v / self.vipa.lambda0
 
 
+class EomSetup(Serializer):
+
+    def __init__(self, key, name, poly_coefs):
+        self.key = key
+        self.name = name
+        self.poly_coefs = poly_coefs
+
+
 class VIPA(Serializer):
 
     def __init__(self, d, n, theta, order, lambda0):
@@ -162,7 +170,13 @@ class VIPA(Serializer):
 
 class Calibration(Serializer):
 
-    def __init__(self, num_brillouin_samples, shift_methanol=None, shift_water=None):
+    def __init__(
+        self,
+        num_brillouin_samples,
+        shift_methanol=None,
+        shift_water=None,
+        expected_shifts_polynomial=None,
+    ):
         """
 
         Parameters
@@ -178,7 +192,15 @@ class Calibration(Serializer):
         self.num_brillouin_samples = num_brillouin_samples
         self.shift_methanol = shift_methanol
         self.shift_water = shift_water
-        self.shifts = np.array([])
+
+        if expected_shifts_polynomial is not None:
+            self.expected_shifts_polynomial = np.poly1d(
+                np.array(expected_shifts_polynomial[::-1])
+            )
+        else:
+            self.expected_shifts_polynomial = None
+
+        self._shifts = np.array([])
         self.orders = np.array([])
 
         self.update_calibration()
@@ -193,13 +215,28 @@ class Calibration(Serializer):
             self.shift_methanol = shift_methanol
         self.update_calibration()
 
+    @property
+    def shifts(self):
+        if self.expected_shifts_polynomial:
+            return self.expected_shifts_polynomial
+        return self._shifts
+
     def update_calibration(self):
         # Construct array with the frequency shifts
-        tmp = [self.shift_methanol, self.shift_water]
-        self.shifts = np.full(2 + 2 * self.num_brillouin_samples, 0.0)
-        for i in range(self.num_brillouin_samples):
-            self.shifts[i + 1] = tmp[i]
-            self.shifts[-1 * (i + 2)] = -1 * tmp[i]
+        if self.shift_methanol is None and self.shift_water is None:
+            if self.expected_shifts_polynomial is None:
+                raise ValueError(
+                    "Either provide expected shifts polynomial coefs or shift values."
+                )
+
+        self._shifts = np.array([])
+        if self.shift_methanol or self.shift_water:
+            tmp = [self.shift_methanol, self.shift_water]
+
+            self._shifts = np.full(2 + 2 * self.num_brillouin_samples, 0.0)
+            for i in range(self.num_brillouin_samples):
+                self._shifts[i + 1] = tmp[i]
+                self._shifts[-1 * (i + 2)] = -1 * tmp[i]
 
         # The interference orders to which the peaks belong
         self.orders = np.full(2 + 2 * self.num_brillouin_samples, 0)
@@ -269,7 +306,17 @@ AVAILABLE_SETUPS = [
             lambda0=780.24e-9,
         ),
         calibration=Calibration(
-            num_brillouin_samples=1, shift_methanol=3.78e9, shift_water=5.066e9
+            num_brillouin_samples=1,
+            # coefficients for polynomial volt => frequency shift [Hz], lowest order first
+            expected_shifts_polynomial=[
+                3.40049,
+                0.596645,
+                -0.106149,
+                0.0228064,
+                -0.00273963,
+                0.000168553,
+                -4.19117e-6,
+            ],
         ),
         temperature=295.15,
         extraction_method=ExtractionMethod.ARC_FROM_PTS_OF_ALL_IMGS,

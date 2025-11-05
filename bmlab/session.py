@@ -186,6 +186,35 @@ class Session(Serializer):
             arc_width = math.ceil(em.arc_width / binning_factor)
             em.set_arc_width(arc_width)
 
+    def load_voltages_from_file(self):
+        """
+        Load voltages data from the file for all calibrations
+        in all repetitions and store them in the calibration models.
+        """
+        if self.file is None:
+            return
+
+        repetitions = self.file.repetition_keys()
+        for repetition in repetitions:
+            rep = self.file.get_repetition(repetition)
+
+            if not hasattr(rep, "calibration") or rep.calibration is None:
+                continue
+
+            voltages = rep.calibration.get_voltages()
+            if voltages is not None:
+
+                calib_keys = rep.calibration.image_keys()
+                # Store the voltages in the calibration model
+                # We use the first calibration key if available
+                # or a default key "1" which is typically the calibration key
+                cm = self.calibration_models.get(repetition)
+                if cm is not None:
+                    # Store voltages with key "1" which is the typical calibration key
+                    # This makes voltages accessible for all calibration operations
+                    for calib_key in calib_keys:
+                        cm.set_voltages(calib_key, voltages)
+
     @staticmethod
     def get_instance():
         """
@@ -239,6 +268,7 @@ class Session(Serializer):
             }
             self.set_image_shape()
             self.set_arc_width()
+            self.load_voltages_from_file()
             # Initialize current setup
             session.setup = AVAILABLE_SETUPS[0]
 
@@ -287,6 +317,11 @@ class Session(Serializer):
         if self.current_repetition() is None:
             return None
         return self.current_repetition().calibration.get_binning_factor(calib_key)
+
+    def get_calibration_voltages(self, calib_key):
+        if self.current_repetition() is None:
+            return None
+        return self.current_repetition().calibration.get_voltages()
 
     def get_image_keys(self, sort_by_time=False):
         if self.current_repetition() is None:

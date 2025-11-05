@@ -272,6 +272,22 @@ class MeasurementData(object):
             return [i for _, i in sorted(zip(dates, keys))]
         return []
 
+    def get_voltages(self):
+        """
+        Returns the voltages array if it exists in the data.
+
+        Returns
+        -------
+        out: numpy.ndarray or None
+            Array of voltage values, or None if not present.
+        """
+        if self.data is None:
+            return None
+        voltages = self.data.get("voltages")
+        if voltages is None:
+            return None
+        return np.array(voltages)
+
     def get_image(self, image_key):
         """
         Returns the image from the calibration for given key.
