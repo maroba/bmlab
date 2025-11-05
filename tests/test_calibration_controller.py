@@ -11,16 +11,16 @@ def test_find_peaks_real_data():
     session = Session.get_instance()
 
     # Load data file
-    session.set_file(pathlib.Path(__file__).parent / 'data' / 'Water.h5')
+    session.set_file(pathlib.Path(__file__).parent / "data" / "Water.h5")
 
     # Select repetition
-    session.set_current_repetition('0')
+    session.set_current_repetition("0")
     session.set_setup(AVAILABLE_SETUPS[0])
 
     # Set orientation
-    session.orientation = Orientation(rotation=1, reflection={
-        'vertically': False, 'horizontally': False
-    })
+    session.orientation = Orientation(
+        rotation=1, reflection={"vertically": False, "horizontally": False}
+    )
 
     cm = session.calibration_model()
 
@@ -57,6 +57,6 @@ def region_found(center, regions):
 
 
 def test_calibrate():
-    calib_key = '0'
+    calib_key = "0"
     cc = CalibrationController()
     cc.calibrate(calib_key)

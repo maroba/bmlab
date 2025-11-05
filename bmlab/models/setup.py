@@ -9,8 +9,9 @@ from bmlab.serializer import Serializer
 
 class Setup(Serializer):
 
-    def __init__(self, key, name, pixel_size, focal_length,
-                 vipa, calibration, temperature):
+    def __init__(
+        self, key, name, pixel_size, focal_length, vipa, calibration, temperature
+    ):
         """
 
         Parameters
@@ -42,18 +43,25 @@ class Setup(Serializer):
 
     def post_deserialize(self):
         # Migrations from 0.3.0 to 0.4.0
-        if not hasattr(self, 'temperature'):
+        if not hasattr(self, "temperature"):
             self.temperature = 295.15
 
     def init_vipa_params(self):
-        p1 = (2 * np.pi * self.vipa.n * self.vipa.d *
-              np.cos(self.vipa.theta)) / constants.c
-        p2 = -(2 * np.pi * self.vipa.n * self.vipa.d *
-               np.tan(self.vipa.theta)) /\
-              (constants.c * self.focal_length) * np.sqrt(
-            1 - (self.vipa.n * np.sin(self.vipa.theta)) ** 2)
-        p3 = -np.pi / constants.c * self.vipa.d * np.cos(self.vipa.theta) /\
-            (self.focal_length ** 2)
+        p1 = (
+            2 * np.pi * self.vipa.n * self.vipa.d * np.cos(self.vipa.theta)
+        ) / constants.c
+        p2 = (
+            -(2 * np.pi * self.vipa.n * self.vipa.d * np.tan(self.vipa.theta))
+            / (constants.c * self.focal_length)
+            * np.sqrt(1 - (self.vipa.n * np.sin(self.vipa.theta)) ** 2)
+        )
+        p3 = (
+            -np.pi
+            / constants.c
+            * self.vipa.d
+            * np.cos(self.vipa.theta)
+            / (self.focal_length**2)
+        )
 
         return p1, p2, p3
 
@@ -64,11 +72,35 @@ class Setup(Serializer):
         # taken from
         # https://www.engineeringtoolbox.com/sound-speed-water-d_598.html
         # temperature water [K]
-        water_t = [273.15, 278.15, 283.15, 293.15, 303.15, 313.15,
-                   323.15, 333.15, 343.15, 353.15, 363.15, 373.15]
+        water_t = [
+            273.15,
+            278.15,
+            283.15,
+            293.15,
+            303.15,
+            313.15,
+            323.15,
+            333.15,
+            343.15,
+            353.15,
+            363.15,
+            373.15,
+        ]
         # sound velocity water [m/s]
-        water_vs = [1403, 1427, 1447, 1481, 1507, 1526,
-                    1541, 1552, 1555, 1555, 1550, 1543]
+        water_vs = [
+            1403,
+            1427,
+            1447,
+            1481,
+            1507,
+            1526,
+            1541,
+            1552,
+            1555,
+            1555,
+            1550,
+            1543,
+        ]
         # Refractive index water [1]
         water_n = 1.3298
         water_f = interpolate.interp1d(water_t, water_vs)
@@ -82,10 +114,8 @@ class Setup(Serializer):
         methanol_n = 1.3234
         methanol_f = interpolate.interp1d(methanol_t, methanol_vs)
 
-        water_shift = self.brillouin_shift(
-            water_f(temperature), water_n)
-        methanol_shift = self.brillouin_shift(
-            methanol_f(temperature), methanol_n)
+        water_shift = self.brillouin_shift(water_f(temperature), water_n)
+        methanol_shift = self.brillouin_shift(methanol_f(temperature), methanol_n)
 
         self.calibration.set_shift_methanol(methanol_shift)
         self.calibration.set_shift_water(water_shift)
@@ -98,7 +128,7 @@ class Setup(Serializer):
 class VIPA(Serializer):
 
     def __init__(self, d, n, theta, order, lambda0):
-        """ Start values for VIPA fit
+        """Start values for VIPA fit
 
         Parameters
         ----------
@@ -117,13 +147,12 @@ class VIPA(Serializer):
         self.order = order
         self.lambda0 = lambda0
         self.FSR = constants.c / (2 * self.n * self.d * np.cos(self.theta))
-        self.m = round(constants.c/(self.lambda0 * self.FSR))
+        self.m = round(constants.c / (self.lambda0 * self.FSR))
 
 
 class Calibration(Serializer):
 
-    def __init__(self, num_brillouin_samples, shift_methanol=None,
-                 shift_water=None):
+    def __init__(self, num_brillouin_samples, shift_methanol=None, shift_water=None):
         """
 
         Parameters
@@ -164,46 +193,71 @@ class Calibration(Serializer):
 
         # The interference orders to which the peaks belong
         self.orders = np.full(2 + 2 * self.num_brillouin_samples, 0)
-        self.orders[-(1 + self.num_brillouin_samples):] = 1
+        self.orders[-(1 + self.num_brillouin_samples) :] = 1
 
 
 AVAILABLE_SETUPS = [
-    Setup(key='S0',
-          name='780 nm @ Biotec R340',
-          pixel_size=6.5e-6,
-          focal_length=0.2,
-          vipa=VIPA(d=0.006743,
-                    n=1.45367,
-                    theta=0.8 * 2 * np.pi / 360,
-                    order=0,
-                    lambda0=780.24e-9),
-          calibration=Calibration(num_brillouin_samples=2,
-                                  shift_methanol=3.78e9,
-                                  shift_water=5.066e9),
-          temperature=295.15),
-    Setup(key='S1',
-          name='780 nm @ Biotec R340 old',
-          pixel_size=6.5e-6,
-          focal_length=0.2,
-          vipa=VIPA(d=0.006743,
-                    n=1.45367,
-                    theta=0.8 * 2 * np.pi / 360,
-                    order=0,
-                    lambda0=780.24e-9),
-          calibration=Calibration(num_brillouin_samples=1,
-                                  shift_methanol=3.78e9),
-          temperature=295.15),
-    Setup(key='S2',
-          name='532 nm @ Biotec R314',
-          pixel_size=6.5e-6,
-          focal_length=0.2,
-          vipa=VIPA(d=0.003371,
-                    n=1.46071,
-                    theta=0.8 * 2 * np.pi / 360,
-                    order=0,
-                    lambda0=532e-9),
-          calibration=Calibration(num_brillouin_samples=2,
-                                  shift_methanol=5.54e9,
-                                  shift_water=7.43e9),
-          temperature=295.15)
+    Setup(
+        key="S0",
+        name="780 nm @ Biotec R340",
+        pixel_size=6.5e-6,
+        focal_length=0.2,
+        vipa=VIPA(
+            d=0.006743,
+            n=1.45367,
+            theta=0.8 * 2 * np.pi / 360,
+            order=0,
+            lambda0=780.24e-9,
+        ),
+        calibration=Calibration(
+            num_brillouin_samples=2, shift_methanol=3.78e9, shift_water=5.066e9
+        ),
+        temperature=295.15,
+    ),
+    Setup(
+        key="S1",
+        name="780 nm @ Biotec R340 old",
+        pixel_size=6.5e-6,
+        focal_length=0.2,
+        vipa=VIPA(
+            d=0.006743,
+            n=1.45367,
+            theta=0.8 * 2 * np.pi / 360,
+            order=0,
+            lambda0=780.24e-9,
+        ),
+        calibration=Calibration(num_brillouin_samples=1, shift_methanol=3.78e9),
+        temperature=295.15,
+    ),
+    Setup(
+        key="S2",
+        name="532 nm @ Biotec R314",
+        pixel_size=6.5e-6,
+        focal_length=0.2,
+        vipa=VIPA(
+            d=0.003371, n=1.46071, theta=0.8 * 2 * np.pi / 360, order=0, lambda0=532e-9
+        ),
+        calibration=Calibration(
+            num_brillouin_samples=2, shift_methanol=5.54e9, shift_water=7.43e9
+        ),
+        temperature=295.15,
+    ),
+    # TODO: Let Matthew / Conrad check if the settings are correct:
+    Setup(
+        key="S3",
+        name="780 nm FOB",
+        pixel_size=6.5e-6,
+        focal_length=0.2,
+        vipa=VIPA(
+            d=0.006743,
+            n=1.45367,
+            theta=0.8 * 2 * np.pi / 360,
+            order=0,
+            lambda0=780.24e-9,
+        ),
+        calibration=Calibration(
+            num_brillouin_samples=1, shift_methanol=3.78e9, shift_water=5.066e9
+        ),
+        temperature=295.15,
+    ),
 ]

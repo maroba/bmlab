@@ -533,32 +533,38 @@ class CalibrationController(ImageController):
         if spectra is None:
             return
 
-        if self.session.extraction_method == ExtractionMethod.ARC_FROM_PTS_OF_ALL_IMGS:
-            ...
+        if self.session.extraction_method == ExtractionMethod.ARC_FROM_PTS_OF_AVG_IMG:
+            spectra = [np.mean(spectra, axis=0)]
         else:
-            spectrum = np.mean(spectra, axis=0)
+            num_brillouin_samples = 1
+            min_prominence = 10
+            min_height = 10
+
+        for frame_idx, spectrum in enumerate(spectra):
             regions_brillouin, regions_rayleigh = self._find_peaks_in_single_image(
                 spectrum, min_prominence, num_brillouin_samples, min_height
             )
 
-        cm = self.session.calibration_model()
-        logger.info("Adding Brillouin regions")
-        for i, region in enumerate(regions_brillouin):
-            logger.info(f"Calib {calib_key}, Brillouin region {i}: {region}")
-            # We use "set_brillouin_region" here so overlapping
-            # regions don't get merged
-            cm.set_brillouin_region(calib_key, i, region)
-        logger.info("Adding Brillouin regions")
-        for i, region in enumerate(regions_rayleigh):
-            # We use "set_brillouin_region" here so overlapping
-            # regions don't get merged
-            cm.set_rayleigh_region(calib_key, i, region)
+            cm = self.session.calibration_model()
+            logger.info(f"Adding Brillouin regions for frame {frame_idx}")
+            for i, region in enumerate(regions_brillouin):
+                logger.info(f"Calib {calib_key}, Brillouin region {i}: {region}")
+                # We use "set_brillouin_region" here so overlapping
+                # regions don't get merged
+                cm.set_brillouin_region(calib_key, i, region, frame_num=frame_idx)
+            logger.info(f"Adding Rayleigh regions for frame {frame_idx}")
+            for i, region in enumerate(regions_rayleigh):
+                logger.info(f"Calib {calib_key}, Rayleigh region {i}: {region}")
+                # We use "set_brillouin_region" here so overlapping
+                # regions don't get merged
+                cm.set_rayleigh_region(calib_key, i, region, frame_num=frame_idx)
 
     def _find_peaks_in_single_image(
         self, spectrum, min_prominence, num_brillouin_samples, min_height
     ):
 
         # This is the background value
+        logger.info("Finding peaks in single image")
         base = np.nanmedian(spectrum)
         peaks, properties = find_peaks(
             spectrum, prominence=min_prominence, width=True, height=min_height + base
@@ -570,76 +576,120 @@ class CalibrationController(ImageController):
 
         # Check if we found enough peak candidates
         if len(peaks) < num_peaks:
+            logger.info(f"Found {len(peaks)} peaks, but {num_peaks} are required.")
+            logger.info("Trying again without minimum height...")
+
             # If we didn't find enough peaks, we try again
             # without a minimum height
             peaks, properties = find_peaks(
                 spectrum, prominence=min_prominence, width=True
             )
-            # If there a still too few, we give up
             if len(peaks) < num_peaks:
-                return
+                logger.info(
+                    f"Found {len(peaks)} peaks without minimum height, but {num_peaks} are required. Giving up."
+                )
+                return None, None
+
+        if len(peaks) > num_peaks:
+            # Keep the Rayleigh peaks and the strongest Brillouin peaks
+            logger.info(
+                f"Found {len(peaks)} peaks, but only {num_peaks} are needed. Filtering..."
+            )
+
+            peak_heights = properties["peak_heights"]
+
+            # Sort all peaks by intensity (descending) to identify Rayleigh peaks
+            intensity_sorted_indices = np.argsort(peak_heights)[::-1]
+
+            # The two highest intensity peaks are the Rayleigh peaks
+            rayleigh_indices = set(intensity_sorted_indices[:2])
+
+            # Get the remaining peak indices (potential Brillouin peaks)
+            brillouin_candidate_indices = [
+                idx for idx in range(len(peaks)) if idx not in rayleigh_indices
+            ]
+
+            # Sort the Brillouin candidates by intensity (descending)
+            brillouin_candidate_indices.sort(
+                key=lambda idx: peak_heights[idx], reverse=True
+            )
+
+            # Keep the strongest (num_peaks - 2) Brillouin peaks
+            num_brillouin_to_keep = num_peaks - 2
+            selected_brillouin_indices = set(
+                brillouin_candidate_indices[:num_brillouin_to_keep]
+            )
+
+            # Combine Rayleigh and selected Brillouin peaks
+            selected_indices = sorted(rayleigh_indices | selected_brillouin_indices)
+
+            # Filter peaks and properties
+            peaks = peaks[selected_indices]
+            properties["widths"] = properties["widths"][selected_indices]
+            properties["peak_heights"] = properties["peak_heights"][selected_indices]
+
+            logger.info(
+                f"Kept {len(peaks)} peaks after filtering (2 Rayleigh + {num_brillouin_to_keep} Brillouin)."
+            )
+
+        logger.info(f"Found {len(peaks)} peaks.")
+
+        assert len(peaks) == num_peaks
 
         # We need to identify the position between the
         # Stokes and Anti-Stokes Brillouin peaks
 
-        # In case there are just enough peaks,
-        # we use the position in the middle:
-        if len(peaks) == num_peaks:
-            idx = int(num_peaks / 2)
-            center = np.mean(peaks[idx - 1 : idx + 1])
-        # Otherwise we use the center of mass as the middle
-        else:
-            # Set everything below the background value to zero,
-            # so it does not affect the center calculation
-            spectrum[spectrum < base] = 0
-            # Calculate the center of mass
-            center = np.nansum(spectrum * range(1, len(spectrum) + 1)) / np.nansum(
-                spectrum
-            )
+        idx = int(num_peaks / 2)
+        center = np.mean(peaks[idx - 1 : idx + 1])
 
-            # Check that we have enough peaks on both sides of the center
-            num_peaks_right = len(peaks[peaks > center])
-            num_peaks_left = len(peaks[peaks <= center])
-
-            # If not enough peaks on the right, shift center to the left
-            if num_peaks_right < (num_brillouin_samples + 1):
-                center = np.mean(
-                    peaks[-(num_brillouin_samples + 2) : -num_brillouin_samples]
-                )
-            # If not enough peaks on the left, shift center to the right
-            elif num_peaks_left < (num_brillouin_samples + 1):
-                center = np.mean(
-                    peaks[num_brillouin_samples : num_brillouin_samples + 2]
-                )
-
+        # Count how many peaks are on the left (Stokes) side of center
         num_peaks_left = len(peaks[peaks <= center])
 
-        indices_brillouin = range(
-            num_peaks_left - num_brillouin_samples,
-            num_peaks_left + num_brillouin_samples,
-        )
+        # Calculate indices for Brillouin peaks (on both sides of center)
+        # They are centered around the middle, spanning num_brillouin_samples on each side
+        brillouin_start_idx = num_peaks_left - num_brillouin_samples
+        brillouin_end_idx = num_peaks_left + num_brillouin_samples
+        indices_brillouin = range(brillouin_start_idx, brillouin_end_idx)
+
+        # Rayleigh peaks are just outside the Brillouin peaks on both sides
         indices_rayleigh = [
-            num_peaks_left - num_brillouin_samples - 1,
-            num_peaks_left + num_brillouin_samples,
+            brillouin_start_idx - 1,  # Rayleigh peak on the left (Stokes side)
+            brillouin_end_idx,  # Rayleigh peak on the right (Anti-Stokes side)
         ]
 
-        def peak_to_region(i):
-            r = (peaks[i] + properties["widths"][i] * np.array((-4, 4))).astype(int)
-            r[r > len(spectrum)] = len(spectrum)
-            return tuple(r)
+        def peak_to_region(peak_idx):
+            """Convert a peak index to a region tuple (start, end) based on peak width."""
+            peak_position = peaks[peak_idx]
+            peak_width = properties["widths"][peak_idx]
 
-        regions_brillouin = list(map(peak_to_region, indices_brillouin))
-        # Merge the Brillouin regions if necessary
+            # Create region spanning 4 widths on each side of the peak
+            region_start = int(peak_position - 4 * peak_width)
+            region_end = int(peak_position + 4 * peak_width)
+
+            # Clamp region end to spectrum length
+            region_end = min(region_end, len(spectrum))
+
+            return (region_start, region_end)
+
+        # Convert peak indices to regions
+        regions_brillouin = [peak_to_region(i) for i in indices_brillouin]
+
+        # Merge Brillouin regions if we have multiple samples per side
         if num_brillouin_samples > 1:
+            # Split into Stokes (left) and Anti-Stokes (right) sides
+            stokes_regions = regions_brillouin[:num_brillouin_samples]
+            anti_stokes_regions = regions_brillouin[num_brillouin_samples:]
+
+            # Merge each side into a single region
             regions_brillouin = [
+                (stokes_regions[0][0], stokes_regions[-1][1]),  # Merged Stokes region
                 (
-                    regions_brillouin[0][0],
-                    regions_brillouin[num_brillouin_samples - 1][1],
-                ),
-                (regions_brillouin[num_brillouin_samples][0], regions_brillouin[-1][1]),
+                    anti_stokes_regions[0][0],
+                    anti_stokes_regions[-1][1],
+                ),  # Merged Anti-Stokes region
             ]
 
-        regions_rayleigh = map(peak_to_region, indices_rayleigh)
+        regions_rayleigh = [peak_to_region(i) for i in indices_rayleigh]
 
         return regions_brillouin, regions_rayleigh
 
@@ -708,10 +758,16 @@ class CalibrationController(ImageController):
     def fit_rayleigh_regions(self, calib_key):
         cm = self.session.calibration_model()
         spectra = cm.get_spectra(calib_key)
-        regions = cm.get_rayleigh_regions(calib_key)
+
+        logger.info(f"Fitting Rayleigh regions for calibration {calib_key}")
 
         cm.clear_rayleigh_fits(calib_key)
         for frame_num, spectrum in enumerate(spectra):
+            # Get regions for this specific frame, fallback to frame 0
+            regions = cm.get_rayleigh_regions(calib_key, frame_num=frame_num)
+            if not regions and frame_num != 0:
+                # Fallback to frame 0 if no regions found for this frame
+                regions = cm.get_rayleigh_regions(calib_key, frame_num=0)
             for region_key, region in enumerate(regions):
                 xdata = np.arange(len(spectrum))
                 w0, fwhm, intensity, offset = fit_lorentz_region(
@@ -724,21 +780,43 @@ class CalibrationController(ImageController):
     def fit_brillouin_regions(self, calib_key):
         cm = self.session.calibration_model()
         spectra = cm.get_spectra(calib_key)
-        regions = cm.get_brillouin_regions(calib_key)
         setup = self.session.setup
         if not setup:
             return
 
+        logger.info(
+            f"Fitting Brillouin regions for calibration {calib_key} with num_brillouin_samples={setup.calibration.num_brillouin_samples}"
+        )
+
         cm.clear_brillouin_fits(calib_key)
         for frame_num, spectrum in enumerate(spectra):
+            # Get regions for this specific frame, fallback to frame 0
+            regions = cm.get_brillouin_regions(calib_key, frame_num=frame_num)
+            if not regions and frame_num != 0:
+                # Fallback to frame 0 if no regions found for this frame
+                regions = cm.get_brillouin_regions(calib_key, frame_num=0)
             for region_key, region in enumerate(regions):
                 xdata = np.arange(len(spectrum))
-                w0s, fwhms, intensities, offset = fit_lorentz_region(
-                    region, xdata, spectrum, setup.calibration.num_brillouin_samples
-                )
-                cm.add_brillouin_fit(
-                    calib_key, region_key, frame_num, w0s, fwhms, intensities, offset
-                )
+                try:
+                    w0s, fwhms, intensities, offset = fit_lorentz_region(
+                        region, xdata, spectrum, setup.calibration.num_brillouin_samples
+                    )
+
+                except Exception as e:
+                    logger.error(
+                        f"Error fitting Brillouin region {region_key} in calibration {calib_key}, frame {frame_num}: {e}"
+                    )
+                    raise e
+                else:
+                    cm.add_brillouin_fit(
+                        calib_key,
+                        region_key,
+                        frame_num,
+                        w0s,
+                        fwhms,
+                        intensities,
+                        offset,
+                    )
 
     def expected_frequencies(self, calib_key=None, current_frame=None):
         cm = self.session.calibration_model()

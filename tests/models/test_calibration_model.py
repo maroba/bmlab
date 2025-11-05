@@ -1,5 +1,4 @@
-from bmlab.models.calibration_model import CalibrationModel, \
-    FitSet, BrillouinFit
+from bmlab.models.calibration_model import CalibrationModel, FitSet, BrillouinFit
 
 import numpy as np
 
@@ -122,32 +121,32 @@ def test_get_frequencies_by_calib_key():
     cm = CalibrationModel()
 
     frequencies0 = np.arange(100).reshape(1, -1)
-    cm.set_frequencies('0', 0, list(frequencies0))
+    cm.set_frequencies("0", 0, list(frequencies0))
 
     frequencies1 = np.arange(100).reshape(1, -1) + 10
-    cm.set_frequencies('1', 10, list(frequencies1))
+    cm.set_frequencies("1", 10, list(frequencies1))
 
-    assert (cm.get_frequencies_by_calib_key('0') == frequencies0).all()
-    assert (cm.get_frequencies_by_calib_key('1') == frequencies1).all()
+    assert (cm.get_frequencies_by_calib_key("0") == frequencies0).all()
+    assert (cm.get_frequencies_by_calib_key("1") == frequencies1).all()
 
-    cm.clear_frequencies('0')
-    assert cm.get_frequencies_by_calib_key('0') is None
+    cm.clear_frequencies("0")
+    assert cm.get_frequencies_by_calib_key("0") is None
 
 
 def test_get_frequency_by_calib_key():
     cm = CalibrationModel()
 
     frequencies0 = list(np.arange(100).reshape(1, -1))
-    cm.set_frequencies('0', 0, frequencies0)
+    cm.set_frequencies("0", 0, frequencies0)
 
     frequencies1 = list(np.arange(100).reshape(1, -1) + 10)
-    cm.set_frequencies('1', 10, frequencies1)
+    cm.set_frequencies("1", 10, frequencies1)
 
-    assert cm.get_frequency_by_calib_key(70.7, '0') == 70.7
-    assert cm.get_frequency_by_calib_key(80, '1') == 90
+    assert cm.get_frequency_by_calib_key(70.7, "0") == 70.7
+    assert cm.get_frequency_by_calib_key(80, "1") == 90
 
-    cm.clear_frequencies('0')
-    assert cm.get_frequency_by_calib_key(70.7, '0') is None
+    cm.clear_frequencies("0")
+    assert cm.get_frequency_by_calib_key(70.7, "0") is None
 
 
 def test_get_frequencies_by_time():
@@ -157,47 +156,46 @@ def test_get_frequencies_by_time():
     Fill calibration model with a single calibration
     """
     frequencies0 = np.arange(100).reshape(1, -1)
-    cm.set_frequencies('0', 0, list(frequencies0))
+    cm.set_frequencies("0", 0, list(frequencies0))
 
     # Test that it returns the exact frequency axis
     frequencies = cm.get_frequencies_by_time([0])
-    np.testing.assert_allclose(frequencies, frequencies0, atol=1.E-8)
+    np.testing.assert_allclose(frequencies, frequencies0, atol=1.0e-8)
 
     # Test that extrapolation works
     frequencies = cm.get_frequencies_by_time([10])
-    np.testing.assert_allclose(frequencies, frequencies0, atol=1.E-8)
+    np.testing.assert_allclose(frequencies, frequencies0, atol=1.0e-8)
 
     frequencies = cm.get_frequencies_by_time([-10])
-    np.testing.assert_allclose(frequencies, frequencies0, atol=1.E-8)
+    np.testing.assert_allclose(frequencies, frequencies0, atol=1.0e-8)
 
     # Test that it accepts a list of times
     frequencies = cm.get_frequencies_by_time([0, 10, -10])
-    np.testing.assert_allclose(
-        frequencies, np.tile(frequencies0, (3, 1)), atol=1.E-8)
+    np.testing.assert_allclose(frequencies, np.tile(frequencies0, (3, 1)), atol=1.0e-8)
 
     # Test that it accepts an integer as single time point
     frequencies = cm.get_frequencies_by_time(0)
-    np.testing.assert_allclose(frequencies, frequencies0, atol=1.E-8)
+    np.testing.assert_allclose(frequencies, frequencies0, atol=1.0e-8)
 
     """
     Fill calibration model with a second calibration
     """
     frequencies1 = np.arange(100).reshape(1, -1) + 10
-    cm.set_frequencies('1', 10, list(frequencies1))
+    cm.set_frequencies("1", 10, list(frequencies1))
 
     # Test that it returns the exact frequency axis
     frequencies = cm.get_frequencies_by_time([0])
-    np.testing.assert_allclose(frequencies, frequencies0, atol=1.E-8)
+    np.testing.assert_allclose(frequencies, frequencies0, atol=1.0e-8)
 
     frequencies = cm.get_frequencies_by_time([10])
-    np.testing.assert_allclose(frequencies, frequencies1, atol=1.E-8)
+    np.testing.assert_allclose(frequencies, frequencies1, atol=1.0e-8)
 
     # Test that extrapolation works
     frequencies = cm.get_frequencies_by_time([-10])
-    np.testing.assert_allclose(frequencies, frequencies0, atol=1.E-8)
+    np.testing.assert_allclose(frequencies, frequencies0, atol=1.0e-8)
 
     frequencies = cm.get_frequencies_by_time([20])
-    np.testing.assert_allclose(frequencies, frequencies1, atol=1.E-8)
+    np.testing.assert_allclose(frequencies, frequencies1, atol=1.0e-8)
 
     # Test that it accepts a list of times
     frequencies = cm.get_frequencies_by_time([0, 10, -10, 20])
@@ -206,11 +204,11 @@ def test_get_frequencies_by_time():
     frequencies_expected[1, :] = frequencies1
     frequencies_expected[2, :] = frequencies0
     frequencies_expected[3, :] = frequencies1
-    np.testing.assert_allclose(frequencies, frequencies_expected, atol=1.E-8)
+    np.testing.assert_allclose(frequencies, frequencies_expected, atol=1.0e-8)
 
     # Test that it accepts an integer as single time point
     frequencies = cm.get_frequencies_by_time(0)
-    np.testing.assert_allclose(frequencies, frequencies0, atol=1.E-8)
+    np.testing.assert_allclose(frequencies, frequencies0, atol=1.0e-8)
 
 
 def test_get_frequency_by_time():
@@ -220,12 +218,12 @@ def test_get_frequency_by_time():
     Fill calibration model with values for calibrations
     """
     # Test that one calibration works
-    cm.set_frequencies('0', 0, list(np.arange(100).reshape(1, -1)))
+    cm.set_frequencies("0", 0, list(np.arange(100).reshape(1, -1)))
 
     frequency = cm.get_frequency_by_time(0, 0)
-    np.testing.assert_allclose(frequency, 0, atol=1.E-8)
+    np.testing.assert_allclose(frequency, 0, atol=1.0e-8)
     frequency = cm.get_frequency_by_time(10, 0)
-    np.testing.assert_allclose(frequency, 0, atol=1.E-8)
+    np.testing.assert_allclose(frequency, 0, atol=1.0e-8)
 
     # Ensure we don't throw a hard error in case our requested value
     # is outside the interpolation range
@@ -241,15 +239,15 @@ def test_get_frequency_by_time():
 
     expected = np.zeros((5, 5, 5, 2, 2, 2))
     expected[:, :, :, 1, :, :] = 50
-    np.testing.assert_allclose(frequencies, expected, atol=1.E-8)
+    np.testing.assert_allclose(frequencies, expected, atol=1.0e-8)
 
     # Test that two calibrations work
-    cm.set_frequencies('1', 10, list(np.arange(100).reshape(1, -1) + 10))
+    cm.set_frequencies("1", 10, list(np.arange(100).reshape(1, -1) + 10))
 
     frequency = cm.get_frequency_by_time(0, 0)
-    np.testing.assert_allclose(frequency, 0, atol=1.E-8)
+    np.testing.assert_allclose(frequency, 0, atol=1.0e-8)
     frequency = cm.get_frequency_by_time(10, 0)
-    np.testing.assert_allclose(frequency, 10, atol=1.E-8)
+    np.testing.assert_allclose(frequency, 10, atol=1.0e-8)
 
     # Ensure we don't throw a hard error in case our requested value
     # is outside the interpolation range
@@ -265,35 +263,35 @@ def test_get_frequency_by_time():
 
     expected = 10 * np.ones((5, 5, 5, 2, 2, 2))
     expected[:, :, :, 1, :, :] = 60
-    np.testing.assert_allclose(frequencies, expected, atol=1.E-8)
+    np.testing.assert_allclose(frequencies, expected, atol=1.0e-8)
 
     # Test that times array gets repeated properly, if shapes don't match
     times = 10 * np.ones((5, 5, 5, 2, 2, 1))
     frequencies = cm.get_frequency_by_time(times, positions)
-    np.testing.assert_allclose(frequencies, expected, atol=1.E-8)
+    np.testing.assert_allclose(frequencies, expected, atol=1.0e-8)
 
     times = 10 * np.ones((5, 5, 5, 2, 1, 1))
     frequencies = cm.get_frequency_by_time(times, positions)
-    np.testing.assert_allclose(frequencies, expected, atol=1.E-8)
+    np.testing.assert_allclose(frequencies, expected, atol=1.0e-8)
 
     times = 10 * np.ones((5, 5, 5, 2, 3, 1))
     frequencies = cm.get_frequency_by_time(times, positions)
     assert frequencies is None
 
     # Test that three calibrations work
-    cm.set_frequencies('2', 30, list(np.arange(100).reshape(1, -1) + 30))
+    cm.set_frequencies("2", 30, list(np.arange(100).reshape(1, -1) + 30))
 
     frequency = cm.get_frequency_by_time(0, 0)
-    np.testing.assert_allclose(frequency, 0, atol=1.E-8)
+    np.testing.assert_allclose(frequency, 0, atol=1.0e-8)
 
     frequency = cm.get_frequency_by_time(10, 0)
-    np.testing.assert_allclose(frequency, 10, atol=1.E-8)
+    np.testing.assert_allclose(frequency, 10, atol=1.0e-8)
 
     frequency = cm.get_frequency_by_time(20, 0)
-    np.testing.assert_allclose(frequency, 20, atol=1.E-8)
+    np.testing.assert_allclose(frequency, 20, atol=1.0e-8)
 
     frequency = cm.get_frequency_by_time(20, 11)
-    np.testing.assert_allclose(frequency, 31, atol=1.E-8)
+    np.testing.assert_allclose(frequency, 31, atol=1.0e-8)
 
     # Test that the function also accepts arrays
     times = 10 * np.ones((5, 5, 5, 2, 2, 2))
@@ -306,14 +304,14 @@ def test_get_frequency_by_time():
     expected[:, :, :, 0, :, 1] = 20
     expected[:, :, :, 1, :, 0] = 60
     expected[:, :, :, 1, :, 1] = 70
-    np.testing.assert_allclose(frequencies, expected, atol=1.E-8)
+    np.testing.assert_allclose(frequencies, expected, atol=1.0e-8)
 
     # Test that in case of a single time point,
     # it is used for all positions
     frequencies = cm.get_frequency_by_time(10, positions)
     expected = 10 * np.ones((5, 5, 5, 2, 2, 2))
     expected[:, :, :, 1, :, :] = 60
-    np.testing.assert_allclose(frequencies, expected, atol=1.E-8)
+    np.testing.assert_allclose(frequencies, expected, atol=1.0e-8)
 
     # Test that if we have more than one time point and
     # the shape does not match the shape of positions,
@@ -324,21 +322,21 @@ def test_get_frequency_by_time():
     # Test that it also accepts tuples
     frequencies = cm.get_frequency_by_time(10, (0, 0, 50, 50))
     expected = np.array([10, 10, 60, 60])
-    np.testing.assert_allclose(frequencies, expected, atol=1.E-8)
+    np.testing.assert_allclose(frequencies, expected, atol=1.0e-8)
 
     frequencies = cm.get_frequency_by_time((10, 20, 10, 20), (0, 0, 50, 50))
     expected = np.array([10, 20, 60, 70])
-    np.testing.assert_allclose(frequencies, expected, atol=1.E-8)
+    np.testing.assert_allclose(frequencies, expected, atol=1.0e-8)
 
 
 def test_get_position_by_time():
     cm = CalibrationModel()
 
     frequencies0 = list(np.arange(100).reshape(1, -1))
-    cm.set_frequencies('0', 0, frequencies0)
+    cm.set_frequencies("0", 0, frequencies0)
 
     frequencies1 = list(np.arange(100).reshape(1, -1) + 10)
-    cm.set_frequencies('1', 10, frequencies1)
+    cm.set_frequencies("1", 10, frequencies1)
 
     positions = cm.get_position_by_time(0, [10])
     assert positions == [10]
@@ -351,12 +349,10 @@ def test_get_position_by_time():
 def test_RayleighFitSet_average_fits():
     cm = CalibrationModel()
 
-    cm.add_rayleigh_fit('0', 0, 0,
-                        10, 1, 300, 100)
-    cm.add_rayleigh_fit('0', 0, 1,
-                        12, 1, 300, 100)
+    cm.add_rayleigh_fit("0", 0, 0, 10, 1, 300, 100)
+    cm.add_rayleigh_fit("0", 0, 1, 12, 1, 300, 100)
 
-    w0_avg = cm.rayleigh_fits.average_fits('0', 0)
+    w0_avg = cm.rayleigh_fits.average_fits("0", 0)
 
     assert w0_avg == 11.0
 
@@ -364,12 +360,10 @@ def test_RayleighFitSet_average_fits():
 def test_BrillouinFitSet_average_fits():
     cm = CalibrationModel()
 
-    cm.add_brillouin_fit('0', 0, 0,
-                         10, 1, 300, 100)
-    cm.add_brillouin_fit('0', 0, 1,
-                         12, 1, 300, 100)
+    cm.add_brillouin_fit("0", 0, 0, 10, 1, 300, 100)
+    cm.add_brillouin_fit("0", 0, 1, 12, 1, 300, 100)
 
-    w0_avg = cm.brillouin_fits.average_fits('0', 0)
+    w0_avg = cm.brillouin_fits.average_fits("0", 0)
 
     assert w0_avg == 11.0
 
@@ -377,26 +371,26 @@ def test_BrillouinFitSet_average_fits():
 def test_fitset():
     fit_set = FitSet()
 
-    assert fit_set.make_key('1', 0, 0) == '1::0::0'
-    assert fit_set.make_key('10', 0, 0) == '10::0::0'
-    assert fit_set.split_key('1::0::0') == ['1', 0, 0]
-    assert fit_set.split_key('10::0::0') == ['10', 0, 0]
+    assert fit_set.make_key("1", 0, 0) == "1::0::0"
+    assert fit_set.make_key("10", 0, 0) == "10::0::0"
+    assert fit_set.split_key("1::0::0") == ["1", 0, 0]
+    assert fit_set.split_key("10::0::0") == ["10", 0, 0]
 
-    fit0 = BrillouinFit('1', 1, 4, 11., 12., 13., 14.)
+    fit0 = BrillouinFit("1", 1, 4, 11.0, 12.0, 13.0, 14.0)
     fit_set.add_fit(fit0)
-    fit1 = BrillouinFit('10', 3, 4, 11., 12., 13., 14.)
+    fit1 = BrillouinFit("10", 3, 4, 11.0, 12.0, 13.0, 14.0)
     fit_set.add_fit(fit1)
 
-    assert fit_set.get_fit('1', 1, 4) == fit0
-    assert fit_set.get_fit('1', 2, 4) is None
-    assert fit_set.get_fit('10', 3, 4) == fit1
-    assert fit_set.get_fit('2', 3, 4) is None
+    assert fit_set.get_fit("1", 1, 4) == fit0
+    assert fit_set.get_fit("1", 2, 4) is None
+    assert fit_set.get_fit("10", 3, 4) == fit1
+    assert fit_set.get_fit("2", 3, 4) is None
 
-    fit_set.clear('1')
+    fit_set.clear("1")
 
-    assert fit_set.get_fit('1', 1, 4) is None
-    assert fit_set.get_fit('10', 3, 4) == fit1
+    assert fit_set.get_fit("1", 1, 4) is None
+    assert fit_set.get_fit("10", 3, 4) == fit1
 
-    fit_set.clear('10')
+    fit_set.clear("10")
 
-    assert fit_set.get_fit('10', 3, 4) is None
+    assert fit_set.get_fit("10", 3, 4) is None

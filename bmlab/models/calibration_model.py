@@ -27,41 +27,68 @@ class CalibrationModel(Serializer):
         self.frequency_by_time_interpolator = None
 
     def post_deserialize(self):
+        self._migrate_regions()
         self.refresh_frequency_interpolators()
 
-    def add_brillouin_region(self, calib_key, region):
+    def _migrate_regions(self):
+        """Migrate old region format to new frame-based format"""
+        # Migrate brillouin_regions
+        if self.brillouin_regions:
+            for calib_key, regions in list(self.brillouin_regions.items()):
+                # Check if old format (list of regions)
+                if isinstance(regions, list):
+                    # Convert to new format with frame 0
+                    self.brillouin_regions[calib_key] = {0: regions}
+
+        # Migrate rayleigh_regions
+        if self.rayleigh_regions:
+            for calib_key, regions in list(self.rayleigh_regions.items()):
+                # Check if old format (list of regions)
+                if isinstance(regions, list):
+                    # Convert to new format with frame 0
+                    self.rayleigh_regions[calib_key] = {0: regions}
+
+    def add_brillouin_region(self, calib_key, region, frame_num=0):
         if calib_key not in self.brillouin_regions:
-            self.brillouin_regions[calib_key] = []
+            self.brillouin_regions[calib_key] = {}
+        if frame_num not in self.brillouin_regions[calib_key]:
+            self.brillouin_regions[calib_key][frame_num] = []
 
         region = tuple(round(x) for x in region)
 
-        regions_merge_add_region(
-            self.brillouin_regions[calib_key], region)
+        regions_merge_add_region(self.brillouin_regions[calib_key][frame_num], region)
 
-    def set_brillouin_region(self, calib_key, index, region):
+    def set_brillouin_region(self, calib_key, index, region, frame_num=0):
         if calib_key not in self.brillouin_regions:
-            self.brillouin_regions[calib_key] = []
+            self.brillouin_regions[calib_key] = {}
+        if frame_num not in self.brillouin_regions[calib_key]:
+            self.brillouin_regions[calib_key][frame_num] = []
 
         region = tuple(round(x) for x in region)
 
-        if index < len(self.brillouin_regions[calib_key]):
-            self.brillouin_regions[calib_key][index] = region
+        if index < len(self.brillouin_regions[calib_key][frame_num]):
+            self.brillouin_regions[calib_key][frame_num][index] = region
         else:
-            self.brillouin_regions[calib_key].append(region)
+            self.brillouin_regions[calib_key][frame_num].append(region)
 
-    def get_brillouin_regions(self, calib_key):
-        regions = self.brillouin_regions.get(calib_key)
-        if regions is None:
+    def get_brillouin_regions(self, calib_key, frame_num=0):
+        if calib_key not in self.brillouin_regions:
             return []
-        return regions
+
+        # Return specific frame
+        if frame_num not in self.brillouin_regions[calib_key]:
+            return []
+        return self.brillouin_regions[calib_key][frame_num]
 
     def clear_brillouin_regions(self, calib_key):
-        self.brillouin_regions[calib_key] = []
+        self.brillouin_regions[calib_key] = {}
 
-    def add_brillouin_fit(self, calib_key, region, frame_num,
-                          w0s, fwhms, intensities, offset):
-        fit = BrillouinFit(calib_key, region, frame_num,
-                           w0s, fwhms, intensities, offset)
+    def add_brillouin_fit(
+        self, calib_key, region, frame_num, w0s, fwhms, intensities, offset
+    ):
+        fit = BrillouinFit(
+            calib_key, region, frame_num, w0s, fwhms, intensities, offset
+        )
         self.brillouin_fits.add_fit(fit)
 
     def get_brillouin_fit(self, calib_key, region, frame_num):
@@ -70,39 +97,45 @@ class CalibrationModel(Serializer):
     def clear_brillouin_fits(self, calib_key):
         self.brillouin_fits.clear(calib_key)
 
-    def add_rayleigh_region(self, calib_key, region):
+    def add_rayleigh_region(self, calib_key, region, frame_num=0):
         if calib_key not in self.rayleigh_regions:
-            self.rayleigh_regions[calib_key] = []
+            self.rayleigh_regions[calib_key] = {}
+        if frame_num not in self.rayleigh_regions[calib_key]:
+            self.rayleigh_regions[calib_key][frame_num] = []
 
         region = tuple(round(x) for x in region)
 
-        regions_merge_add_region(
-            self.rayleigh_regions[calib_key], region)
+        regions_merge_add_region(self.rayleigh_regions[calib_key][frame_num], region)
 
-    def set_rayleigh_region(self, calib_key, index, region):
+    def set_rayleigh_region(self, calib_key, index, region, frame_num=0):
         if calib_key not in self.rayleigh_regions:
-            self.rayleigh_regions[calib_key] = []
+            self.rayleigh_regions[calib_key] = {}
+        if frame_num not in self.rayleigh_regions[calib_key]:
+            self.rayleigh_regions[calib_key][frame_num] = []
 
         region = tuple(round(x) for x in region)
 
-        if index < len(self.rayleigh_regions[calib_key]):
-            self.rayleigh_regions[calib_key][index] = region
+        if index < len(self.rayleigh_regions[calib_key][frame_num]):
+            self.rayleigh_regions[calib_key][frame_num][index] = region
         else:
-            self.rayleigh_regions[calib_key].append(region)
+            self.rayleigh_regions[calib_key][frame_num].append(region)
 
-    def get_rayleigh_regions(self, calib_key):
-        regions = self.rayleigh_regions.get(calib_key)
-        if regions is None:
+    def get_rayleigh_regions(self, calib_key, frame_num=0):
+        if calib_key not in self.rayleigh_regions:
             return []
-        return regions
+
+        # Return specific frame
+        if frame_num not in self.rayleigh_regions[calib_key]:
+            return []
+        return self.rayleigh_regions[calib_key][frame_num]
 
     def clear_rayleigh_regions(self, calib_key):
-        self.rayleigh_regions[calib_key] = []
+        self.rayleigh_regions[calib_key] = {}
 
-    def add_rayleigh_fit(self, calib_key, region, frame_num,
-                         w0, fwhm, intensity, offset):
-        fit = RayleighFit(calib_key, region, frame_num,
-                          w0, fwhm, intensity, offset)
+    def add_rayleigh_fit(
+        self, calib_key, region, frame_num, w0, fwhm, intensity, offset
+    ):
+        fit = RayleighFit(calib_key, region, frame_num, w0, fwhm, intensity, offset)
         self.rayleigh_fits.add_fit(fit)
 
     def get_rayleigh_fit(self, calib_key, region, frame_num):
@@ -142,7 +175,9 @@ class CalibrationModel(Serializer):
 
         for key, fit in self.brillouin_fits.fits.items():
             if (fit.calib_key == calib_key) and (fit.frame_num == frame_num):
-                for w0 in fit.w0s:
+                # Ensure w0s is iterable (defensive programming)
+                w0s = np.atleast_1d(fit.w0s)
+                for w0 in w0s:
                     peaks.append(w0)
 
         return np.sort(np.array(peaks))
@@ -179,8 +214,7 @@ class CalibrationModel(Serializer):
         self.frequencies_by_time_interpolator = None
         self.frequency_by_time_interpolator = None
 
-        sorted_keys = sorted(self.calib_times,
-                             key=self.calib_times.get)
+        sorted_keys = sorted(self.calib_times, key=self.calib_times.get)
         # Don't do anything if there are no calibrations
         if len(sorted_keys) < 1:
             return
@@ -196,18 +230,17 @@ class CalibrationModel(Serializer):
             frequency = np.mean(np.array(frequencies), axis=0)
 
             xdata = np.arange(len(frequency))
-            self.frequency_by_calib_key_interpolators[calib_key] =\
-                interpolate.interp1d(xdata, frequency)
+            self.frequency_by_calib_key_interpolators[calib_key] = interpolate.interp1d(
+                xdata, frequency
+            )
 
         """
         Create the interpolator for getting frequencies by time
         """
         if len(sorted_keys) < 2:
-            self.frequencies_by_time_interpolator = \
-                lambda time: np.tile(
-                    np.nanmean(self.frequencies[sorted_keys[0]], 0),
-                    (time.shape[0], 1)
-                )
+            self.frequencies_by_time_interpolator = lambda time: np.tile(
+                np.nanmean(self.frequencies[sorted_keys[0]], 0), (time.shape[0], 1)
+            )
         else:
             calib_times_array = []
             frequencies = []
@@ -218,13 +251,13 @@ class CalibrationModel(Serializer):
             calib_times_array = np.array(calib_times_array)
             frequencies = np.squeeze(frequencies)
 
-            self.frequencies_by_time_interpolator =\
-                interpolate.interp1d(
-                    calib_times_array,
-                    frequencies,
-                    bounds_error=False,
-                    fill_value=(frequencies[0], frequencies[-1]),
-                    axis=0)
+            self.frequencies_by_time_interpolator = interpolate.interp1d(
+                calib_times_array,
+                frequencies,
+                bounds_error=False,
+                fill_value=(frequencies[0], frequencies[-1]),
+                axis=0,
+            )
 
         """
         Create the interpolator for getting a frequency by position and time
@@ -244,23 +277,19 @@ class CalibrationModel(Serializer):
         # interpolate by peak position only
         if len(sorted_keys) < 2:
             frequencies = np.squeeze(frequencies)
-            f = interpolate.interp1d(
-                indices,
-                frequencies,
-                bounds_error=False
-            )
-            self.frequency_by_time_interpolator =\
-                lambda time, position: f(position)
+            f = interpolate.interp1d(indices, frequencies, bounds_error=False)
+            self.frequency_by_time_interpolator = lambda time, position: f(position)
         # Otherwise we can interpolate by time as well
         else:
             f = interpolate.RegularGridInterpolator(
                 (calib_times_array, indices),
                 frequencies,
-                method='linear',
-                bounds_error=False
+                method="linear",
+                bounds_error=False,
             )
-            self.frequency_by_time_interpolator = \
-                lambda time, position: f((time, position))
+            self.frequency_by_time_interpolator = lambda time, position: f(
+                (time, position)
+            )
 
     def get_frequencies_by_calib_key(self, calib_key):
         """
@@ -292,8 +321,7 @@ class CalibrationModel(Serializer):
         The corresponding frequency in Hz
         """
         if calib_key in self.frequency_by_calib_key_interpolators:
-            return self.frequency_by_calib_key_interpolators[
-                calib_key](position)
+            return self.frequency_by_calib_key_interpolators[calib_key](position)
 
     def get_frequencies_by_time(self, time):
         """
@@ -308,8 +336,7 @@ class CalibrationModel(Serializer):
         The frequency axis in Hz
         """
         if self.frequencies_by_time_interpolator is not None:
-            return self.frequencies_by_time_interpolator(
-                np.array(time, ndmin=1))
+            return self.frequencies_by_time_interpolator(np.array(time, ndmin=1))
 
     def get_frequency_by_time(self, time, position):
         """
@@ -349,8 +376,7 @@ class CalibrationModel(Serializer):
                 return None
             else:
                 time = np.tile(
-                    time,
-                    (np.array(shape_position) - np.array(shape_time)) + 1
+                    time, (np.array(shape_position) - np.array(shape_time)) + 1
                 )
 
         if self.frequency_by_time_interpolator is not None:
@@ -383,10 +409,10 @@ class FitSet(Serializer):
         self.fits = {}
 
     def make_key(self, calib_key, region_key, frame_num):
-        return calib_key + '::' + str(region_key) + '::' + str(frame_num)
+        return calib_key + "::" + str(region_key) + "::" + str(frame_num)
 
     def split_key(self, key):
-        items = key.split('::')
+        items = key.split("::")
         items[1] = int(items[1])
         items[2] = int(items[2])
         return items
@@ -416,7 +442,7 @@ class RayleighFitSet(FitSet, Serializer):
             calib_key_, region_key_, _ = self.split_key(key)
             if calib_key == calib_key_ and region_key == region_key_:
                 w0s.append(fit.w0)
-        logger.debug('w0s = ', w0s)
+        logger.debug("w0s = ", w0s)
         if w0s:
             return np.mean(w0s)
         return None
@@ -430,7 +456,7 @@ class BrillouinFitSet(FitSet, Serializer):
             calib_key_, region_key_, _ = self.split_key(key)
             if calib_key == calib_key_ and region_key == region_key_:
                 w0s.append(fit.w0s)
-        logger.debug('w0s = ', w0s)
+        logger.debug("w0s = ", w0s)
         if w0s:
             w0s = np.array(w0s)
             return np.mean(w0s, axis=0)
@@ -439,8 +465,7 @@ class BrillouinFitSet(FitSet, Serializer):
 
 class RayleighFit(Serializer):
 
-    def __init__(self, calib_key, region_key, frame_num,
-                 w0, fwhm, intensity, offset):
+    def __init__(self, calib_key, region_key, frame_num, w0, fwhm, intensity, offset):
         self.calib_key = calib_key
         self.region_key = region_key
         self.frame_num = frame_num
@@ -452,12 +477,14 @@ class RayleighFit(Serializer):
 
 class BrillouinFit(Serializer):
 
-    def __init__(self, calib_key, region_key, frame_num,
-                 w0s, fwhms, intensities, offset):
+    def __init__(
+        self, calib_key, region_key, frame_num, w0s, fwhms, intensities, offset
+    ):
         self.calib_key = calib_key
         self.region_key = region_key
         self.frame_num = frame_num
-        self.w0s = w0s
-        self.fwhms = fwhms
-        self.intensities = intensities
+        # Ensure w0s, fwhms, and intensities are always arrays
+        self.w0s = np.atleast_1d(w0s)
+        self.fwhms = np.atleast_1d(fwhms)
+        self.intensities = np.atleast_1d(intensities)
         self.offset = offset
