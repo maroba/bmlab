@@ -366,6 +366,9 @@ class Session(Serializer):
 
     def set_setup(self, setup):
         self.setup = setup
+        # Update the extraction method based on the setup's extraction method
+        if setup is not None and hasattr(setup, "extraction_method"):
+            self.extraction_method = setup.extraction_method
 
     def set_rotation(self, num_rots):
         self.orientation.set_rotation(num_rots)

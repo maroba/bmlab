@@ -258,7 +258,7 @@ AVAILABLE_SETUPS = [
     # TODO: Let Matthew / Conrad check if the settings are correct:
     Setup(
         key="S3",
-        name="780 nm FOB",
+        name="MPZPM FOB",
         pixel_size=6.5e-6,
         focal_length=0.2,
         vipa=VIPA(
