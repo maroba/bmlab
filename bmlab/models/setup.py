@@ -3,6 +3,7 @@ import numpy as np
 from math import cos
 from scipy import interpolate
 
+from bmlab.constants import ExtractionMethod
 import bmlab.constants as constants
 from bmlab.serializer import Serializer
 
@@ -10,7 +11,15 @@ from bmlab.serializer import Serializer
 class Setup(Serializer):
 
     def __init__(
-        self, key, name, pixel_size, focal_length, vipa, calibration, temperature
+        self,
+        key,
+        name,
+        pixel_size,
+        focal_length,
+        vipa,
+        calibration,
+        temperature,
+        extraction_method,
     ):
         """
 
@@ -40,6 +49,7 @@ class Setup(Serializer):
         self.VIPA_PARAMS = self.init_vipa_params()
         # Default calibration temperature [°C]
         self.temperature = temperature
+        self.extraction_method = extraction_method
 
     def post_deserialize(self):
         # Migrations from 0.3.0 to 0.4.0
@@ -213,6 +223,7 @@ AVAILABLE_SETUPS = [
             num_brillouin_samples=2, shift_methanol=3.78e9, shift_water=5.066e9
         ),
         temperature=295.15,
+        extraction_method=ExtractionMethod.ARC_FROM_PTS_OF_AVG_IMG,
     ),
     Setup(
         key="S1",
@@ -228,6 +239,7 @@ AVAILABLE_SETUPS = [
         ),
         calibration=Calibration(num_brillouin_samples=1, shift_methanol=3.78e9),
         temperature=295.15,
+        extraction_method=ExtractionMethod.ARC_FROM_PTS_OF_AVG_IMG,
     ),
     Setup(
         key="S2",
@@ -241,6 +253,7 @@ AVAILABLE_SETUPS = [
             num_brillouin_samples=2, shift_methanol=5.54e9, shift_water=7.43e9
         ),
         temperature=295.15,
+        extraction_method=ExtractionMethod.ARC_FROM_PTS_OF_AVG_IMG,
     ),
     # TODO: Let Matthew / Conrad check if the settings are correct:
     Setup(
@@ -259,5 +272,6 @@ AVAILABLE_SETUPS = [
             num_brillouin_samples=1, shift_methanol=3.78e9, shift_water=5.066e9
         ),
         temperature=295.15,
+        extraction_method=ExtractionMethod.ARC_FROM_PTS_OF_ALL_IMGS,
     ),
 ]

@@ -11,7 +11,7 @@ from skimage.morphology import closing, disk
 from math import floor
 
 from bmlab import Session
-from bmlab.session import ExtractionMethod
+from bmlab.constants import ExtractionMethod
 from bmlab.fits import fit_vipa, VIPA, fit_lorentz_region
 from bmlab.image import extract_lines_along_arc, find_max_in_radius
 from bmlab.export import FluorescenceExport, FluorescenceCombinedExport, BrillouinExport

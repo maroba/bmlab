@@ -10,6 +10,7 @@ from numpy import transpose
 import math
 
 from bmlab import __version__ as version
+from bmlab.constants import ExtractionMethod
 from bmlab.file import BrillouinFile, is_source_file, is_session_file
 from bmlab.models.extraction_model import ExtractionModel
 from bmlab.models.orientation import Orientation
@@ -99,11 +100,6 @@ def get_valid_source(path):
 class BmlabInvalidFileError(FileNotFoundError):
     def __init__(self, *args, **kwargs):
         super(BmlabInvalidFileError, self).__init__(*args, **kwargs)
-
-
-class ExtractionMethod(Enum):
-    ARC_FROM_PTS_OF_AVG_IMG = "arc_from_pts_of_avg_img"
-    ARC_FROM_PTS_OF_ALL_IMGS = "arc_from_pts_of_all_imgs"
 
 
 class Session(Serializer):

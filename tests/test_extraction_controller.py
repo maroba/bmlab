@@ -2,7 +2,8 @@ from pathlib import Path
 
 import numpy as np
 
-from bmlab.session import Session, ExtractionMethod
+from bmlab.session import Session
+from bmlab.constants import ExtractionMethod
 from bmlab.controllers import ExtractionController
 from bmlab.models import ExtractionModel, Orientation
 from bmlab.models.setup import AVAILABLE_SETUPS
