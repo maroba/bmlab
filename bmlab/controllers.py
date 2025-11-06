@@ -483,6 +483,44 @@ class ImageController(object):
         self.get_time = get_time
         self.get_exposure = get_exposure
 
+    def __str__(self):
+        model_name = (
+            self.model.__name__ if hasattr(self.model, "__name__") else str(self.model)
+        )
+        get_image_name = (
+            self.get_image.__name__
+            if hasattr(self.get_image, "__name__")
+            else str(self.get_image)
+        )
+        get_time_name = (
+            self.get_time.__name__
+            if hasattr(self.get_time, "__name__")
+            else str(self.get_time)
+        )
+        get_exposure_name = (
+            self.get_exposure.__name__
+            if hasattr(self.get_exposure, "__name__")
+            else str(self.get_exposure)
+        )
+
+        # Get model instance summary
+        model_instance = self.model()
+        if model_instance is not None:
+            model_summary = str(model_instance)
+        else:
+            model_summary = "None"
+
+        return (
+            f"{self.__class__.__name__}(\n"
+            f"  model={model_name},\n"
+            f"  get_image={get_image_name},\n"
+            f"  get_time={get_time_name},\n"
+            f"  get_exposure={get_exposure_name}\n"
+            f"  model_content:\n"
+            f"    {model_summary.replace(chr(10), chr(10) + '    ')}\n"
+            f")"
+        )
+
     def extract_spectra(self, image_key, frame_num=None):
         em = self.session.extraction_model()
         if not em:
@@ -724,14 +762,20 @@ class CalibrationController(ImageController):
         for frame_num, spectrum in enumerate(spectra):
             peaks = cm.get_sorted_peaks(calib_key, frame_num)
 
+            logger.info(f"peaks: {peaks}")
+
             if callable(setup.calibration.shifts):
                 voltage = self.session.get_calibration_voltages(calib_key)[frame_num]
                 shift_ = setup.calibration.shifts(voltage)
                 expected_shifts = [0, shift_ * 1e9, -shift_ * 1e9, 0]
+                orders = setup.calibration.orders
             else:
                 expected_shifts = setup.calibration.shifts
+                orders = setup.calibration.orders
 
-            params = fit_vipa(peaks, setup, expected_shifts)
+            logger.info(f"expected_shifts: {expected_shifts}, orders: {orders}")
+
+            params = fit_vipa(peaks, setup, expected_shifts, orders)
             if params is None:
                 continue
             vipa_params.append(params)
@@ -835,6 +879,7 @@ class CalibrationController(ImageController):
             voltage = self.session.get_calibration_voltages(calib_key)[current_frame]
             shift_ = self.session.setup.calibration.shifts(voltage)
             expected_shifts = [0, shift_ * 1e9, -shift_ * 1e9, 0]
+            # expected_shifts = [shift_ * 1e9, -shift_ * 1e9]
         else:
             expected_shifts = self.session.setup.calibration.shifts
 
@@ -956,6 +1001,8 @@ class EvaluationController(ImageController):
             }
         )
 
+        logger.info(f"Evaluation model before analysis: {evm}")
+
         # Initialize the Rayleigh shift
         # used for compensating drifts
         rayleigh_peak_initial = np.nan * np.ones(
@@ -975,9 +1022,19 @@ class EvaluationController(ImageController):
                 if max_count is not None:
                     max_count.value = -1
                 return
+
+            logger.info(
+                f"Retrieve spectra for image key {image_key} at index ({ind_x}, {ind_y}, {ind_z})"
+            )
+
             spectra, times, intensities = self.extract_spectra(image_key)
             if spectra is None:
                 continue
+
+            logger.info(f"spectra shape: {[len(s) for s in spectra]}")
+            logger.info(f"times: {times}")
+            logger.info(f"intensities: {intensities}")
+
             evm.results["time"][ind_x, ind_y, ind_z, :, 0, 0] = times
             evm.results["intensity"][ind_x, ind_y, ind_z, :, 0, 0] = intensities
 
@@ -985,6 +1042,7 @@ class EvaluationController(ImageController):
             # If we don't have frequency axis, we cannot evaluate on it
             if frequencies is None:
                 continue
+            logger.info(f"frequencies.shape: {frequencies.shape}")
             frequencies = list(frequencies)
 
             for region_key, region in enumerate(brillouin_regions):

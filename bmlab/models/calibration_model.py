@@ -27,6 +27,37 @@ class CalibrationModel(Serializer):
         self.frequencies_by_time_interpolator = None
         self.frequency_by_time_interpolator = None
 
+    def __str__(self):
+        num_calibrations = len(self.calib_times)
+        num_spectra = len(self.spectra)
+        num_brillouin_regions = sum(
+            sum(len(regions) for regions in frame_dict.values())
+            for frame_dict in self.brillouin_regions.values()
+        )
+        num_rayleigh_regions = sum(
+            sum(len(regions) for regions in frame_dict.values())
+            for frame_dict in self.rayleigh_regions.values()
+        )
+        num_brillouin_fits = len(self.brillouin_fits.fits)
+        num_rayleigh_fits = len(self.rayleigh_fits.fits)
+        num_vipa_params = len(self.vipa_params)
+        num_frequencies = len(self.frequencies)
+
+        calib_keys = sorted(self.calib_times.keys())
+
+        return (
+            f"CalibrationModel(\n"
+            f"  calibrations: {num_calibrations} ({calib_keys}),\n"
+            f"  spectra: {num_spectra},\n"
+            f"  brillouin_regions: {num_brillouin_regions},\n"
+            f"  rayleigh_regions: {num_rayleigh_regions},\n"
+            f"  brillouin_fits: {num_brillouin_fits},\n"
+            f"  rayleigh_fits: {num_rayleigh_fits},\n"
+            f"  vipa_params: {num_vipa_params},\n"
+            f"  frequencies: {num_frequencies}\n"
+            f")"
+        )
+
     def post_deserialize(self):
         self._migrate_regions()
         self.refresh_frequency_interpolators()

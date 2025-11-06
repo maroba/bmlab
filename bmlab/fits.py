@@ -489,7 +489,7 @@ def are_points_on_line(points):
     return True
 
 
-def fit_vipa(peaks, setup, expected_shifts=None):
+def fit_vipa(peaks, setup, expected_shifts=None, orders=None):
     """
     Fits the VIPA frequency axis
 
@@ -505,9 +505,9 @@ def fit_vipa(peaks, setup, expected_shifts=None):
     # Check that we were given enough peaks
     if peaks is None:
         return
-    if len(peaks) < (setup.calibration.num_brillouin_samples * 2 + 2):
-        logger.warning("Not enough peaks found for VIPA fit.")
-        return
+    # if len(peaks) < (setup.calibration.num_brillouin_samples * 2 + 2):
+    #    logger.warning("Not enough peaks found for VIPA fit.")
+    #    return
 
     # Calculate the start parameters for the VIPA fit
     r0 = peaks[0] * setup.pixel_size
@@ -532,7 +532,7 @@ def fit_vipa(peaks, setup, expected_shifts=None):
         frequencies = VIPA(peaks1, vipa_params) - setup.f0
 
         # Should match the expected frequencies
-        d1 = frequencies - shifts1 - fsr * setup.calibration.orders
+        d1 = frequencies - shifts1 - fsr * orders
 
         # Should give equal values for Stokes and Anti-Stokes
         num_samples = setup.calibration.num_brillouin_samples

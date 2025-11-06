@@ -25,68 +25,96 @@ class EvaluationModel(Serializer):
         for key in self.parameters.keys():
             self.results[key] = np.empty((0,))
 
+    def __str__(self):
+        num_spectra = len(self.spectra)
+
+        # Get result array shapes if they exist
+        result_shapes = {}
+        for key in ["brillouin_peak_position_f", "rayleigh_peak_position_f"]:
+            if key in self.results and self.results[key].size > 0:
+                result_shapes[key] = self.results[key].shape
+
+        # Count non-NaN values in results
+        non_nan_counts = {}
+        for key, arr in self.results.items():
+            if arr.size > 0:
+                non_nan_counts[key] = np.count_nonzero(~np.isnan(arr))
+
+        shape_str = ""
+        if result_shapes:
+            shape_str = f"\n  result_shapes: {result_shapes},"
+
+        return (
+            f"EvaluationModel(\n"
+            f"  nr_brillouin_peaks: {self.nr_brillouin_peaks},\n"
+            f"  spectra: {num_spectra},{shape_str}\n"
+            f"  bounds_w0: {self.bounds_w0},\n"
+            f"  bounds_fwhm: {self.bounds_fwhm},\n"
+            f"  non_nan_result_counts: {non_nan_counts}\n"
+            f")"
+        )
+
     def post_deserialize(self):
         # Migrations from 0.0.13 to 0.1.0
         # Check that the parameters attribute is present
         # @since 0.1.0
-        if not hasattr(self, 'parameters')\
-                or not isinstance(self, OrderedDict):
+        if not hasattr(self, "parameters") or not isinstance(self, OrderedDict):
             self.parameters = self.get_default_parameters()
         # Migrations from 0.1.7 to 0.1.8
         # Check that the bounds attribute is present
         # @since 0.1.8
-        if not hasattr(self, 'bounds'):
+        if not hasattr(self, "bounds"):
             self.bounds = None
         # Migrations from 0.3.0 to 0.4.0
         # Check that the results array also stores the peak offset
         # @since 0.4.0
-        if 'brillouin_peak_offset' not in self.results:
-            self.results['brillouin_peak_offset'] = np.empty(
-                self.results['brillouin_peak_intensity'].shape
+        if "brillouin_peak_offset" not in self.results:
+            self.results["brillouin_peak_offset"] = np.empty(
+                self.results["brillouin_peak_intensity"].shape
             )
-            self.results['brillouin_peak_offset'][:] = np.nan
-        if 'rayleigh_peak_offset' not in self.results:
-            self.results['rayleigh_peak_offset'] = np.empty(
-                self.results['rayleigh_peak_intensity'].shape
+            self.results["brillouin_peak_offset"][:] = np.nan
+        if "rayleigh_peak_offset" not in self.results:
+            self.results["rayleigh_peak_offset"] = np.empty(
+                self.results["rayleigh_peak_intensity"].shape
             )
-            self.results['rayleigh_peak_offset'][:] = np.nan
+            self.results["rayleigh_peak_offset"][:] = np.nan
         # Migrations from 0.4.0 to 0.5.0
         # @since 0.5.0
-        if 'rayleigh_shift' not in self.results:
+        if "rayleigh_shift" not in self.results:
             # Stores how much the Rayleigh peak moved
             # Used for shifting the regions evaluated
-            self.results['rayleigh_shift'] = np.empty(
-                self.results['rayleigh_peak_intensity'].shape
+            self.results["rayleigh_shift"] = np.empty(
+                self.results["rayleigh_peak_intensity"].shape
             )
         # Migrations from 0.5.1 to 0.6.0
         # @since 0.6.0
-        if 'brillouin_peak_position_f' not in self.results:
-            self.results['brillouin_peak_position_f'] = np.empty(
-                self.results['brillouin_peak_position'].shape
+        if "brillouin_peak_position_f" not in self.results:
+            self.results["brillouin_peak_position_f"] = np.empty(
+                self.results["brillouin_peak_position"].shape
             )
-            self.results['brillouin_peak_position_f'][:] = np.nan
-        if 'rayleigh_peak_position_f' not in self.results:
-            self.results['rayleigh_peak_position_f'] = np.empty(
-                self.results['rayleigh_peak_position'].shape
+            self.results["brillouin_peak_position_f"][:] = np.nan
+        if "rayleigh_peak_position_f" not in self.results:
+            self.results["rayleigh_peak_position_f"] = np.empty(
+                self.results["rayleigh_peak_position"].shape
             )
-            self.results['rayleigh_peak_position_f'][:] = np.nan
+            self.results["rayleigh_peak_position_f"][:] = np.nan
         del_keys = [
-            'brillouin_shift',
-            'brillouin_peak_fwhm',
-            'brillouin_peak_position',
-            'rayleigh_peak_fwhm',
-            'rayleigh_peak_position'
+            "brillouin_shift",
+            "brillouin_peak_fwhm",
+            "brillouin_peak_position",
+            "rayleigh_peak_fwhm",
+            "rayleigh_peak_position",
         ]
         for key in del_keys:
             if key in self.results:
                 del self.results[key]
         # Migrations from 0.7.0 to 0.8.0
         # @since 0.8.0
-        if not hasattr(self, 'bounds_w0'):
+        if not hasattr(self, "bounds_w0"):
             self.bounds_w0 = self.bounds
-        if hasattr(self, 'bounds'):
-            delattr(self, 'bounds')
-        if not hasattr(self, 'bounds_fwhm'):
+        if hasattr(self, "bounds"):
+            delattr(self, "bounds")
+        if not hasattr(self, "bounds_fwhm"):
             self.bounds_fwhm = None
 
     def invalidate_results(self):
@@ -95,146 +123,148 @@ class EvaluationModel(Serializer):
 
     @staticmethod
     def get_default_parameters():
-        return OrderedDict({
-            'brillouin_shift_f': {          # [GHz] Brillouin frequency shift
-                'unit': 'GHz',
-                'symbol': r'$\nu_\mathrm{B}$',
-                'label': 'Brillouin frequency shift',
-                'scaling': 1e-9,
-            },
-            'brillouin_peak_fwhm_f': {      # [GHz] Brillouin peak FWHM
-                'unit': 'GHz',
-                'symbol': r'$\Delta_\mathrm{B}$',
-                'label': 'Brillouin peak width',
-                'scaling': 1e-9,
-            },
-            'brillouin_peak_position_f': {    # [GHz] Brillouin peak position
-                'unit': 'GHz',
-                'symbol': r'$s_\mathrm{B}$',
-                'label': 'Brillouin peak position',
-                'scaling': 1e-9,
-            },
-            'brillouin_peak_intensity': {   # [a.u.] Brillouin peak intensity
-                'unit': 'a.u.',
-                'symbol': r'$I_\mathrm{B}$',
-                'label': 'Brillouin peak intensity',
-                'scaling': 1,
-            },
-            'brillouin_peak_offset': {   # [a.u.] Brillouin peak offset
-                'unit': 'a.u.',
-                'symbol': r'$I_{0,\mathrm{B}}$',
-                'label': 'Brillouin peak offset',
-                'scaling': 1,
-            },
-            'rayleigh_peak_fwhm_f': {       # [GHz] Rayleigh peak FWHM
-                'unit': 'GHz',
-                'symbol': r'$\Delta_\mathrm{R}$',
-                'label': 'Rayleigh peak width',
-                'scaling': 1e-9,
-            },
-            'rayleigh_peak_position_f': {     # [GHz] Rayleigh peak position
-                'unit': 'GHz',
-                'symbol': r'$s_\mathrm{R}$',
-                'label': 'Rayleigh peak position',
-                'scaling': 1e-9,
-            },
-            'rayleigh_peak_intensity': {    # [a.u.] Rayleigh peak intensity
-                'unit': 'a.u.',
-                'symbol': r'$I_\mathrm{R}$',
-                'label': 'Rayleigh peak intensity',
-                'scaling': 1,
-            },
-            'rayleigh_peak_offset': {   # [a.u.] Rayleigh peak offset
-                'unit': 'a.u.',
-                'symbol': r'$I_{0,\mathrm{R}}$',
-                'label': 'Rayleigh peak offset',
-                'scaling': 1,
-            },
-            'intensity': {                  # [a.u.] Overall intensity of image
-                'unit': 'a.u.',
-                'symbol': r'$I_\mathrm{total}$',
-                'label': 'Intensity',
-                'scaling': 1,
-            },
-            'time': {                       # [s] The time the measurement
-                'unit': 's',                # point was taken at
-                'symbol': r'$t$',
-                'label': 'Time',
-                'scaling': 1,
-            },
-        })
+        return OrderedDict(
+            {
+                "brillouin_shift_f": {  # [GHz] Brillouin frequency shift
+                    "unit": "GHz",
+                    "symbol": r"$\nu_\mathrm{B}$",
+                    "label": "Brillouin frequency shift",
+                    "scaling": 1e-9,
+                },
+                "brillouin_peak_fwhm_f": {  # [GHz] Brillouin peak FWHM
+                    "unit": "GHz",
+                    "symbol": r"$\Delta_\mathrm{B}$",
+                    "label": "Brillouin peak width",
+                    "scaling": 1e-9,
+                },
+                "brillouin_peak_position_f": {  # [GHz] Brillouin peak position
+                    "unit": "GHz",
+                    "symbol": r"$s_\mathrm{B}$",
+                    "label": "Brillouin peak position",
+                    "scaling": 1e-9,
+                },
+                "brillouin_peak_intensity": {  # [a.u.] Brillouin peak intensity
+                    "unit": "a.u.",
+                    "symbol": r"$I_\mathrm{B}$",
+                    "label": "Brillouin peak intensity",
+                    "scaling": 1,
+                },
+                "brillouin_peak_offset": {  # [a.u.] Brillouin peak offset
+                    "unit": "a.u.",
+                    "symbol": r"$I_{0,\mathrm{B}}$",
+                    "label": "Brillouin peak offset",
+                    "scaling": 1,
+                },
+                "rayleigh_peak_fwhm_f": {  # [GHz] Rayleigh peak FWHM
+                    "unit": "GHz",
+                    "symbol": r"$\Delta_\mathrm{R}$",
+                    "label": "Rayleigh peak width",
+                    "scaling": 1e-9,
+                },
+                "rayleigh_peak_position_f": {  # [GHz] Rayleigh peak position
+                    "unit": "GHz",
+                    "symbol": r"$s_\mathrm{R}$",
+                    "label": "Rayleigh peak position",
+                    "scaling": 1e-9,
+                },
+                "rayleigh_peak_intensity": {  # [a.u.] Rayleigh peak intensity
+                    "unit": "a.u.",
+                    "symbol": r"$I_\mathrm{R}$",
+                    "label": "Rayleigh peak intensity",
+                    "scaling": 1,
+                },
+                "rayleigh_peak_offset": {  # [a.u.] Rayleigh peak offset
+                    "unit": "a.u.",
+                    "symbol": r"$I_{0,\mathrm{R}}$",
+                    "label": "Rayleigh peak offset",
+                    "scaling": 1,
+                },
+                "intensity": {  # [a.u.] Overall intensity of image
+                    "unit": "a.u.",
+                    "symbol": r"$I_\mathrm{total}$",
+                    "label": "Intensity",
+                    "scaling": 1,
+                },
+                "time": {  # [s] The time the measurement
+                    "unit": "s",  # point was taken at
+                    "symbol": r"$t$",
+                    "label": "Time",
+                    "scaling": 1,
+                },
+            }
+        )
 
     def initialize_results_arrays(self, dims):
         shape_general = (
-            dims['dim_x'],
-            dims['dim_y'],
-            dims['dim_z'],
-            dims['nr_images'],
+            dims["dim_x"],
+            dims["dim_y"],
+            dims["dim_z"],
+            dims["nr_images"],
             1,  # We just add this so it matches the ndims of the
             1,  # Brillouin array and reshapes are reduced
         )
 
-        self.results['intensity'] = np.empty(shape_general)
-        self.results['intensity'][:] = np.nan
+        self.results["intensity"] = np.empty(shape_general)
+        self.results["intensity"][:] = np.nan
 
-        self.results['time'] = np.empty(shape_general)
-        self.results['time'][:] = np.nan
+        self.results["time"] = np.empty(shape_general)
+        self.results["time"][:] = np.nan
 
         # We always do a single-peak fit, plus a multi-peak fit if requested.
         # Hence, we have to store
         # (nr_brillouin_peaks + 1) peaks, if nr_brillouin_peaks > 1.
-        nr_brillouin_peaks_to_store = dims['nr_brillouin_peaks']
-        if dims['nr_brillouin_peaks'] > 1:
+        nr_brillouin_peaks_to_store = dims["nr_brillouin_peaks"]
+        if dims["nr_brillouin_peaks"] > 1:
             nr_brillouin_peaks_to_store = nr_brillouin_peaks_to_store + 1
 
         shape_brillouin = (
-            dims['dim_x'],
-            dims['dim_y'],
-            dims['dim_z'],
-            dims['nr_images'],
-            dims['nr_brillouin_regions'],
+            dims["dim_x"],
+            dims["dim_y"],
+            dims["dim_z"],
+            dims["nr_images"],
+            dims["nr_brillouin_regions"],
             nr_brillouin_peaks_to_store,
         )
 
-        self.results['brillouin_peak_position_f'] = np.empty(shape_brillouin)
-        self.results['brillouin_peak_position_f'][:] = np.nan
+        self.results["brillouin_peak_position_f"] = np.empty(shape_brillouin)
+        self.results["brillouin_peak_position_f"][:] = np.nan
 
-        self.results['brillouin_peak_intensity'] = np.empty(shape_brillouin)
-        self.results['brillouin_peak_intensity'][:] = np.nan
+        self.results["brillouin_peak_intensity"] = np.empty(shape_brillouin)
+        self.results["brillouin_peak_intensity"][:] = np.nan
 
-        self.results['brillouin_peak_offset'] = np.empty(shape_brillouin)
-        self.results['brillouin_peak_offset'][:] = np.nan
+        self.results["brillouin_peak_offset"] = np.empty(shape_brillouin)
+        self.results["brillouin_peak_offset"][:] = np.nan
 
-        self.results['brillouin_shift_f'] = np.empty(shape_brillouin)
-        self.results['brillouin_shift_f'][:] = np.nan
+        self.results["brillouin_shift_f"] = np.empty(shape_brillouin)
+        self.results["brillouin_shift_f"][:] = np.nan
 
-        self.results['brillouin_peak_fwhm_f'] = np.empty(shape_brillouin)
-        self.results['brillouin_peak_fwhm_f'][:] = np.nan
+        self.results["brillouin_peak_fwhm_f"] = np.empty(shape_brillouin)
+        self.results["brillouin_peak_fwhm_f"][:] = np.nan
 
         shape_rayleigh = (
-            dims['dim_x'],
-            dims['dim_y'],
-            dims['dim_z'],
-            dims['nr_images'],
-            dims['nr_rayleigh_regions'],
+            dims["dim_x"],
+            dims["dim_y"],
+            dims["dim_z"],
+            dims["nr_images"],
+            dims["nr_rayleigh_regions"],
             1,  # We just add this so it matches the ndims of the
-                #  Brillouin array and reshapes are reduced
+            #  Brillouin array and reshapes are reduced
         )
 
-        self.results['rayleigh_peak_position_f'] = np.empty(shape_rayleigh)
-        self.results['rayleigh_peak_position_f'][:] = np.nan
+        self.results["rayleigh_peak_position_f"] = np.empty(shape_rayleigh)
+        self.results["rayleigh_peak_position_f"][:] = np.nan
 
-        self.results['rayleigh_peak_intensity'] = np.empty(shape_rayleigh)
-        self.results['rayleigh_peak_intensity'][:] = np.nan
+        self.results["rayleigh_peak_intensity"] = np.empty(shape_rayleigh)
+        self.results["rayleigh_peak_intensity"][:] = np.nan
 
-        self.results['rayleigh_peak_offset'] = np.empty(shape_rayleigh)
-        self.results['rayleigh_peak_offset'][:] = np.nan
+        self.results["rayleigh_peak_offset"] = np.empty(shape_rayleigh)
+        self.results["rayleigh_peak_offset"][:] = np.nan
 
-        self.results['rayleigh_peak_fwhm_f'] = np.empty(shape_rayleigh)
-        self.results['rayleigh_peak_fwhm_f'][:] = np.nan
+        self.results["rayleigh_peak_fwhm_f"] = np.empty(shape_rayleigh)
+        self.results["rayleigh_peak_fwhm_f"][:] = np.nan
 
-        self.results['rayleigh_shift'] = np.empty(shape_rayleigh)
-        self.results['rayleigh_shift'][:] = np.nan
+        self.results["rayleigh_shift"] = np.empty(shape_rayleigh)
+        self.results["rayleigh_shift"][:] = np.nan
 
     def set_spectra(self, image_key, spectra):
         self.spectra[image_key] = spectra
@@ -246,22 +276,17 @@ class EvaluationModel(Serializer):
         return None
 
     def get_fits(self, ind_x, ind_y, ind_z):
-        return (self.results['brillouin_peak_position_f'][
-               ind_x, ind_y, ind_z, :, :, :],
-               self.results['brillouin_peak_fwhm_f'][
-               ind_x, ind_y, ind_z, :, :, :],
-               self.results['brillouin_peak_intensity'][
-               ind_x, ind_y, ind_z, :, :, :],
-               self.results['brillouin_peak_offset'][
-               ind_x, ind_y, ind_z, :, :, :]), \
-               (self.results['rayleigh_peak_position_f'][
-                ind_x, ind_y, ind_z, :, :, :],
-                self.results['rayleigh_peak_fwhm_f'][
-                ind_x, ind_y, ind_z, :, :, :],
-                self.results['rayleigh_peak_intensity'][
-                ind_x, ind_y, ind_z, :, :, :],
-                self.results['rayleigh_peak_offset'][
-                ind_x, ind_y, ind_z, :, :, :])
+        return (
+            self.results["brillouin_peak_position_f"][ind_x, ind_y, ind_z, :, :, :],
+            self.results["brillouin_peak_fwhm_f"][ind_x, ind_y, ind_z, :, :, :],
+            self.results["brillouin_peak_intensity"][ind_x, ind_y, ind_z, :, :, :],
+            self.results["brillouin_peak_offset"][ind_x, ind_y, ind_z, :, :, :],
+        ), (
+            self.results["rayleigh_peak_position_f"][ind_x, ind_y, ind_z, :, :, :],
+            self.results["rayleigh_peak_fwhm_f"][ind_x, ind_y, ind_z, :, :, :],
+            self.results["rayleigh_peak_intensity"][ind_x, ind_y, ind_z, :, :, :],
+            self.results["rayleigh_peak_offset"][ind_x, ind_y, ind_z, :, :, :],
+        )
 
     def get_parameter_keys(self):
         return self.parameters
@@ -284,13 +309,12 @@ class EvaluationModel(Serializer):
             self.bounds_fwhm = None
 
         # Initialize the bounds if necessary
-        if self.nr_brillouin_peaks > 1 and\
-                (self.bounds_w0 is None or
-                 len(self.bounds_w0) is not self.nr_brillouin_peaks):
-            self.bounds_w0 = [['min', 'max'] for _ in
-                              range(self.nr_brillouin_peaks)]
-        if self.nr_brillouin_peaks > 1 and\
-                (self.bounds_fwhm is None or
-                 len(self.bounds_fwhm) is not self.nr_brillouin_peaks):
-            self.bounds_fwhm = [['0', 'inf'] for _ in
-                                range(self.nr_brillouin_peaks)]
+        if self.nr_brillouin_peaks > 1 and (
+            self.bounds_w0 is None or len(self.bounds_w0) is not self.nr_brillouin_peaks
+        ):
+            self.bounds_w0 = [["min", "max"] for _ in range(self.nr_brillouin_peaks)]
+        if self.nr_brillouin_peaks > 1 and (
+            self.bounds_fwhm is None
+            or len(self.bounds_fwhm) is not self.nr_brillouin_peaks
+        ):
+            self.bounds_fwhm = [["0", "inf"] for _ in range(self.nr_brillouin_peaks)]

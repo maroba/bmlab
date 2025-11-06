@@ -292,7 +292,6 @@ AVAILABLE_SETUPS = [
         temperature=295.15,
         extraction_method=ExtractionMethod.ARC_FROM_PTS_OF_AVG_IMG,
     ),
-    # TODO: Let Matthew / Conrad check if the settings are correct:
     Setup(
         key="S3",
         name="MPZPM FOB",
@@ -316,6 +315,62 @@ AVAILABLE_SETUPS = [
                 -0.00273963,
                 0.000168553,
                 -4.19117e-6,
+            ],
+        ),
+        temperature=295.15,
+        extraction_method=ExtractionMethod.ARC_FROM_PTS_OF_ALL_IMGS,
+    ),
+    Setup(
+        key="S4",
+        name="MPZPM FOB, Fit 1",
+        pixel_size=6.5e-6,
+        focal_length=0.2,
+        vipa=VIPA(
+            d=0.006743,
+            n=1.45367,
+            theta=0.8 * 2 * np.pi / 360,
+            order=0,
+            lambda0=780.24e-9,
+        ),
+        calibration=Calibration(
+            num_brillouin_samples=1,
+            # coefficients for polynomial volt => frequency shift [Hz], lowest order first
+            expected_shifts_polynomial=[
+                3.78509,
+                0.268194,
+                0.0387374,
+                -0.00875844,
+                0.000894938,
+                -0.0000432597,
+                7.69557e-7,
+            ],
+        ),
+        temperature=295.15,
+        extraction_method=ExtractionMethod.ARC_FROM_PTS_OF_ALL_IMGS,
+    ),
+    Setup(
+        key="S5",
+        name="MPZPM FOB, Fit 2",
+        pixel_size=6.5e-6,
+        focal_length=0.2,
+        vipa=VIPA(
+            d=0.006743,
+            n=1.45367,
+            theta=0.8 * 2 * np.pi / 360,
+            order=0,
+            lambda0=780.24e-9,
+        ),
+        calibration=Calibration(
+            num_brillouin_samples=1,
+            # coefficients for polynomial volt => frequency shift [Hz], lowest order first
+            expected_shifts_polynomial=[
+                3.66825,
+                0.268194,
+                0.0387374,
+                -0.00875844,
+                0.000894938,
+                -0.0000432597,
+                7.69557e-7,
             ],
         ),
         temperature=295.15,
