@@ -762,7 +762,7 @@ class CalibrationController(ImageController):
         for frame_num, spectrum in enumerate(spectra):
             peaks = cm.get_sorted_peaks(calib_key, frame_num)
 
-            logger.info(f"peaks: {peaks}")
+            logger.debug(f"peaks: {peaks}")
 
             if callable(setup.calibration.shifts):
                 voltage = self.session.get_calibration_voltages(calib_key)[frame_num]
@@ -773,7 +773,7 @@ class CalibrationController(ImageController):
                 expected_shifts = setup.calibration.shifts
                 orders = setup.calibration.orders
 
-            logger.info(f"expected_shifts: {expected_shifts}, orders: {orders}")
+            logger.debug(f"expected_shifts: {expected_shifts}, orders: {orders}")
 
             params = fit_vipa(peaks, setup, expected_shifts, orders)
             if params is None:
@@ -1023,17 +1023,9 @@ class EvaluationController(ImageController):
                     max_count.value = -1
                 return
 
-            logger.info(
-                f"Retrieve spectra for image key {image_key} at index ({ind_x}, {ind_y}, {ind_z})"
-            )
-
             spectra, times, intensities = self.extract_spectra(image_key)
             if spectra is None:
                 continue
-
-            logger.info(f"spectra shape: {[len(s) for s in spectra]}")
-            logger.info(f"times: {times}")
-            logger.info(f"intensities: {intensities}")
 
             evm.results["time"][ind_x, ind_y, ind_z, :, 0, 0] = times
             evm.results["intensity"][ind_x, ind_y, ind_z, :, 0, 0] = intensities
@@ -1042,7 +1034,7 @@ class EvaluationController(ImageController):
             # If we don't have frequency axis, we cannot evaluate on it
             if frequencies is None:
                 continue
-            logger.info(f"frequencies.shape: {frequencies.shape}")
+
             frequencies = list(frequencies)
 
             for region_key, region in enumerate(brillouin_regions):
@@ -1346,6 +1338,10 @@ class EvaluationController(ImageController):
         labels: list
             The labels of the positions
         """
+        logger.info(
+            f"Getting data for parameter {parameter_key}, brillouin peak index {brillouin_peak_index}"
+        )
+
         resolution = self.session.get_payload_resolution()
 
         dimensionality = sum(np.array(resolution) > 1)
