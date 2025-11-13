@@ -759,31 +759,72 @@ class CalibrationController(ImageController):
         if max_count is not None:
             max_count.value += len(spectra)
 
-        for frame_num, spectrum in enumerate(spectra):
-            peaks = cm.get_sorted_peaks(calib_key, frame_num)
+        if callable(setup.calibration.shifts):
+            peaks = []
+            shifts = [0]
+            left_rayleigh_peaks = []
+            right_rayleigh_peaks = []
+            for frame_num, spectrum in enumerate(spectra):
+                peaks_ = cm.get_sorted_peaks(calib_key, frame_num)
+                num_peaks_right = len(peaks_) // 2
 
-            logger.debug(f"peaks: {peaks}")
+                left_rayleigh_peaks.append(peaks_[0])
+                right_rayleigh_peaks.append(peaks_[-1])
 
-            if callable(setup.calibration.shifts):
+                peaks += list(peaks_[1 : num_peaks_right + 1])
                 voltage = self.session.get_calibration_voltages(calib_key)[frame_num]
-                shift_ = setup.calibration.shifts(voltage)
-                expected_shifts = [0, shift_ * 1e9, -shift_ * 1e9, 0]
-                orders = setup.calibration.orders
-            else:
+                shifts.append(setup.calibration.shifts(voltage) * 1.0e9)
+
+            peaks = sorted(
+                [np.mean(left_rayleigh_peaks)] + peaks + [np.mean(right_rayleigh_peaks)]
+            )
+
+            shifts = list(sorted(shifts))
+
+            logger.debug(f"peaks: {peaks}, peaks.len: {len(peaks)}")
+            logger.debug(f"Calibration shifts: {shifts}")
+            expected_shifts = shifts + [-s for s in shifts[::-1]]
+
+            orders = [0] * (len(expected_shifts) // 2) + [1] * (
+                len(expected_shifts) // 2
+            )
+            logger.debug(f"orders: {orders}")
+            logger.debug(
+                f"expected_shifts: {expected_shifts}, len: {len(expected_shifts)}"
+            )
+            params = fit_vipa(
+                np.asarray(peaks),
+                setup,
+                np.asarray(expected_shifts),
+                orders=np.asarray(orders),
+            )
+            if params:
+                for frame_num, _ in enumerate(spectra):
+                    # Use the same frequency axis for all frames. That allows us to
+                    # reuse the frequency-fetching logic in the evaluation step.
+                    vipa_params.append(params)
+                    xdata = np.arange(len(spectrum))
+                    frequencies.append(VIPA(xdata, params) - setup.f0)
+        else:
+            for frame_num, spectrum in enumerate(spectra):
+                peaks = cm.get_sorted_peaks(calib_key, frame_num)
+
+                logger.debug(f"peaks: {peaks}")
+
                 expected_shifts = setup.calibration.shifts
                 orders = setup.calibration.orders
 
-            logger.debug(f"expected_shifts: {expected_shifts}, orders: {orders}")
+                logger.debug(f"expected_shifts: {expected_shifts}, orders: {orders}")
 
-            params = fit_vipa(peaks, setup, expected_shifts, orders)
-            if params is None:
-                continue
-            vipa_params.append(params)
-            xdata = np.arange(len(spectrum))
+                params = fit_vipa(peaks, setup, expected_shifts, orders)
+                if params is None:
+                    continue
+                vipa_params.append(params)
+                xdata = np.arange(len(spectrum))
 
-            frequencies.append(VIPA(xdata, params) - setup.f0)
-            if count is not None:
-                count.value += 1
+                frequencies.append(VIPA(xdata, params) - setup.f0)
+                if count is not None:
+                    count.value += 1
 
         cm.set_vipa_params(calib_key, vipa_params)
         cm.set_frequencies(calib_key, time, frequencies)
