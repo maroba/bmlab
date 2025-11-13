@@ -760,6 +760,8 @@ class CalibrationController(ImageController):
             max_count.value += len(spectra)
 
         if callable(setup.calibration.shifts):
+            # in case of the modified EOM method, the shifts are determined
+            # from the applied voltage, and is therefore a callable
             peaks = []
             shifts = [0]
             left_rayleigh_peaks = []
@@ -788,6 +790,7 @@ class CalibrationController(ImageController):
             orders = [0] * (len(expected_shifts) // 2) + [1] * (
                 len(expected_shifts) // 2
             )
+
             logger.debug(f"orders: {orders}")
             logger.debug(
                 f"expected_shifts: {expected_shifts}, len: {len(expected_shifts)}"
