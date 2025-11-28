@@ -9,6 +9,7 @@ import re
 import logging
 import numbers
 import builtins
+from enum import Enum
 
 import h5py
 
@@ -21,8 +22,10 @@ class Serializer(object):
     def serialize(self, parent, name, skip=[]):
         group = parent.create_group(name)
 
-        group.attrs['type'] = '%s.%s' % (self.__class__.__module__,
-                                         self.__class__.__name__)
+        group.attrs["type"] = "%s.%s" % (
+            self.__class__.__module__,
+            self.__class__.__name__,
+        )
 
         for var_name, var_value in self.__dict__.items():
 
@@ -43,9 +46,18 @@ class Serializer(object):
         parent.create_dataset(name, data=array)
 
     def serialize_string(self, parent, string, name):
-        ds = parent.create_dataset(name, data=string,
-                                   dtype=h5py.string_dtype())
-        ds.attrs['type'] = 'builtins.str'
+        ds = parent.create_dataset(name, data=string, dtype=h5py.string_dtype())
+        ds.attrs["type"] = "builtins.str"
+
+    def serialize_enum(self, parent, enum_value, name):
+        ds = parent.create_dataset(
+            name, data=enum_value.value, dtype=h5py.string_dtype()
+        )
+        ds.attrs["type"] = "enum"
+        ds.attrs["enum_class"] = "%s.%s" % (
+            enum_value.__class__.__module__,
+            enum_value.__class__.__name__,
+        )
 
     def serialize_number(self, parent, number, name):
         parent.create_dataset(name, data=number)
@@ -62,6 +74,8 @@ class Serializer(object):
             wrapped_list.serialize(group, name)
         elif isinstance(value, Serializer):
             value.serialize(group, name)
+        elif isinstance(value, Enum):
+            self.serialize_enum(group, value, name)
         elif is_list_like(value) and not isinstance(value, str):
             self.serialize_array(group, value, name)
         elif is_scalar(value):
@@ -71,13 +85,13 @@ class Serializer(object):
         elif value is None:
             pass
         else:
-            raise Exception('Cannot serialize variable %s' % name)
+            raise Exception("Cannot serialize variable %s" % name)
 
     @classmethod
     def deserialize(cls, group):
-        class_ = group.attrs.get('type')
+        class_ = group.attrs.get("type")
 
-        if class_ == 'builtins.list':
+        if class_ == "builtins.list":
             instance = list()
             instance_handle = instance
             num_items = len(group.keys())
@@ -86,7 +100,7 @@ class Serializer(object):
                 instance.append(None)
                 cls.do_deserialize(instance_handle, value, -1)
             return instance
-        elif class_ == 'builtins.tuple':
+        elif class_ == "builtins.tuple":
             instance = list()
             instance_handle = instance
             num_items = len(group.keys())
@@ -96,7 +110,7 @@ class Serializer(object):
                 cls.do_deserialize(instance_handle, value, -1)
             return tuple(instance)
 
-        if class_ == 'builtins.dict':
+        if class_ == "builtins.dict":
             instance = dict()
             instance_handle = instance
         else:
@@ -117,14 +131,21 @@ class Serializer(object):
             if var_value.shape == ():
                 item = var_value[...].item()
                 if isinstance(item, bytes):
-                    item = item.decode('utf-8')
-                instance_handle[var_name] = item
+                    item = item.decode("utf-8")
+
+                # Handle enum deserialization
+                if var_value.attrs.get("type") == "enum":
+                    enum_class_name = var_value.attrs.get("enum_class")
+                    enum_class = _class_from_full_class_name(enum_class_name)
+                    instance_handle[var_name] = enum_class(item)
+                else:
+                    instance_handle[var_name] = item
             else:
                 instance_handle[var_name] = var_value[...]
         elif isinstance(var_value, h5py.Group):
             instance_handle[var_name] = Serializer.deserialize(var_value)
         else:
-            raise Exception('Cannot deserialize object %s' % var_name)
+            raise Exception("Cannot deserialize object %s" % var_name)
 
     def post_deserialize(self):
         """
@@ -141,7 +162,7 @@ class SerializableTuple(Serializer, builtins.tuple):
 
     def serialize(self, parent, name):
         group = parent.create_group(name)
-        group.attrs['type'] = 'builtins.tuple'
+        group.attrs["type"] = "builtins.tuple"
         for idx, value in enumerate(self.pure_tuple):
             self.do_serialize(group, value, str(idx))
 
@@ -153,7 +174,7 @@ class SerializableList(Serializer, builtins.list):
 
     def serialize(self, parent, name):
         group = parent.create_group(name)
-        group.attrs['type'] = 'builtins.list'
+        group.attrs["type"] = "builtins.list"
         for idx, value in enumerate(self.pure_list):
             self.do_serialize(group, value, str(idx))
 
@@ -166,7 +187,7 @@ class SerializableDict(Serializer, builtins.dict):
     def serialize(self, parent, name):
         group = parent.create_group(name)
 
-        group.attrs['type'] = 'builtins.dict'
+        group.attrs["type"] = "builtins.dict"
 
         for key, value in self.pure_dict.items():
             if callable(value):
@@ -179,7 +200,7 @@ def is_scalar(value):
 
 
 def is_list_like(value):
-    return hasattr(value, '__len__') and not isinstance(value, dict)
+    return hasattr(value, "__len__") and not isinstance(value, dict)
 
 
 def _init_raw_object(full_class_name):
@@ -202,7 +223,7 @@ def _init_raw_object(full_class_name):
 
 def _class_from_full_class_name(full_class_name):
 
-    pattern = re.compile('(.+)[.]([^.]+)')
+    pattern = re.compile("(.+)[.]([^.]+)")
     match = pattern.match(full_class_name)
     module_name = match[1]
     class_name = match[2]
